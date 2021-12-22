@@ -17,7 +17,6 @@
  */
 
 import org.apache.flink.test.util.AbstractTestBase;
-
 import org.junit.After;
 import org.junit.Before;
 
@@ -26,7 +25,9 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/** Base class for JDBC lookup test. */
+/**
+ * Base class for JDBC lookup test.
+ */
 public class JdbcLookupTestBase extends AbstractTestBase {
 
     public static final String DB_URL = "jdbc:derby:memory:lookup";
@@ -39,7 +40,7 @@ public class JdbcLookupTestBase extends AbstractTestBase {
 
         Class.forName(JdbcTestFixture.DERBY_EBOOKSHOP_DB.getDriverClass());
         try (Connection conn = DriverManager.getConnection(DB_URL + ";create=true");
-                Statement stat = conn.createStatement()) {
+             Statement stat = conn.createStatement()) {
             stat.executeUpdate(
                     "CREATE TABLE "
                             + LOOKUP_TABLE
@@ -50,14 +51,14 @@ public class JdbcLookupTestBase extends AbstractTestBase {
                             + "comment2 VARCHAR(1000))");
 
             Object[][] data =
-                    new Object[][] {
-                        new Object[] {1, "1", "11-c1-v1", "11-c2-v1"},
-                        new Object[] {1, "1", "11-c1-v2", "11-c2-v2"},
-                        new Object[] {2, "3", null, "23-c2"},
-                        new Object[] {2, "5", "25-c1", "25-c2"},
-                        new Object[] {3, "8", "38-c1", "38-c2"}
+                    new Object[][]{
+                            new Object[]{1, "1", "11-c1-v1", "11-c2-v1"},
+                            new Object[]{1, "1", "11-c1-v2", "11-c2-v2"},
+                            new Object[]{2, "3", null, "23-c2"},
+                            new Object[]{2, "5", "25-c1", "25-c2"},
+                            new Object[]{3, "8", "38-c1", "38-c2"}
                     };
-            boolean[] surroundedByQuotes = new boolean[] {false, true, true, true};
+            boolean[] surroundedByQuotes = new boolean[]{false, true, true, true};
 
             StringBuilder sqlQueryBuilder =
                     new StringBuilder(
@@ -95,7 +96,7 @@ public class JdbcLookupTestBase extends AbstractTestBase {
     public void clearOutputTable() throws Exception {
         Class.forName(JdbcTestFixture.DERBY_EBOOKSHOP_DB.getDriverClass());
         try (Connection conn = DriverManager.getConnection(DB_URL);
-                Statement stat = conn.createStatement()) {
+             Statement stat = conn.createStatement()) {
             stat.execute("DROP TABLE " + LOOKUP_TABLE);
         }
     }

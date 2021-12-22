@@ -14,6 +14,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.utils.TableSchemaUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -23,9 +24,7 @@ import java.util.Set;
  * createDynamicTableSource: create ADBPG source
  */
 @Internal
-public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, DynamicTableSourceFactory {
-    private static final Logger LOG = LoggerFactory.getLogger(AdbpgDynamicTableFactory.class);
-
+public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, DynamicTableSourceFactory {
     // required options
     public static final ConfigOption<String> URL =
             ConfigOptions.key("url")
@@ -47,7 +46,6 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                     .stringType()
                     .noDefaultValue()
                     .withDescription("The jdbc password.");
-
     // common optional options
     public static final ConfigOption<Integer> RETRY_WAIT_TIME =
             ConfigOptions.key("retrywaittime")
@@ -74,7 +72,6 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                     .intType()
                     .noDefaultValue()
                     .withDescription("VERBOSE OR NOT");
-
     //optional sink options
     public static final ConfigOption<Integer> BATCH_SIZE =
             ConfigOptions.key("batchsize")
@@ -116,7 +113,6 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                     .intType()
                     .noDefaultValue()
                     .withDescription("Write Mode");
-
     //optional dim options
     public static final ConfigOption<Integer> JOINMAXROWS =
             ConfigOptions.key("joinmaxrows")
@@ -138,6 +134,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                     .intType()
                     .noDefaultValue()
                     .withDescription("cacheTTLMs");
+    private static final Logger LOG = LoggerFactory.getLogger(AdbpgDynamicTableFactory.class);
 
     @Override
     public DynamicTableSink createDynamicTableSink(Context context) {
@@ -149,7 +146,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
         TableSchema tableSchema =
                 TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
         LOG.info("Try to get and validate configuration.");
-        String url =  config.get(URL);
+        String url = config.get(URL);
         String tablename = config.get(TABLE_NAME);
         String username = config.get(USERNAME);
         String password = config.get(PASSWORD);
@@ -176,7 +173,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                         .map(pk -> pk.getColumns().toArray(new String[0]))
                         .orElse(null);
         LogicalType[] lts = new LogicalType[fieldNum];
-        for(int i = 0; i < fieldNum; i++) {
+        for (int i = 0; i < fieldNum; i++) {
             lts[i] = tableSchema.getFieldDataType(i).get().getLogicalType();
         }
         validateSink(url,
@@ -227,7 +224,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
 
     @Override
     public String factoryIdentifier() {
-        return "adbpg";
+        return "adbpg-nightly";
     }
 
     @Override
@@ -270,7 +267,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
         final ReadableConfig config = helper.getOptions();
 
         LOG.info("Try to get and validate configuration.");
-        String url =  config.get(URL);
+        String url = config.get(URL);
         String tablename = config.get(TABLE_NAME);
         String username = config.get(USERNAME);
         String password = config.get(PASSWORD);
@@ -295,7 +292,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
             fieldNamesStr[i] = tableSchema.getFieldName(i).get();
         }
         LogicalType[] lts = new LogicalType[fieldNum];
-        for(int i = 0; i < fieldNum; i++) {
+        for (int i = 0; i < fieldNum; i++) {
             lts[i] = tableSchema.getFieldDataType(i).get().getLogicalType();
         }
 
@@ -339,27 +336,28 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                 cacheTTLMs,
                 verbose);
     }
+
     private void validateSink(String url,
-                         String tablename,
-                         String username,
-                         String password,
-                         int fieldNum,
-                         String[] fieldNamesStr,
-                         String[] keyFields,
-                         LogicalType[] lts,
-                         int retryWaitTime,
-                         int batchSize,
-                         int batchWriteTimeoutMs,
-                         int maxRetryTime,
-                         int connectionMaxActive,
-                         String conflictMode,
-                         int useCopy,
-                         String targetSchema,
-                         String exceptionMode,
-                         int reserveMS,
-                         int caseSensitive,
-                         int writeMode,
-                         int verbose) {
+                              String tablename,
+                              String username,
+                              String password,
+                              int fieldNum,
+                              String[] fieldNamesStr,
+                              String[] keyFields,
+                              LogicalType[] lts,
+                              int retryWaitTime,
+                              int batchSize,
+                              int batchWriteTimeoutMs,
+                              int maxRetryTime,
+                              int connectionMaxActive,
+                              String conflictMode,
+                              int useCopy,
+                              String targetSchema,
+                              String exceptionMode,
+                              int reserveMS,
+                              int caseSensitive,
+                              int writeMode,
+                              int verbose) {
         if (!url.contains("jdbc:postgresql:")) {
             throw new RuntimeException("invalid url, get " + url + ", expected jdbc:postgresql://hostname:port/database");
         }
@@ -390,11 +388,11 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
         if (connectionMaxActive <= 0) {
             throw new RuntimeException("invalid connectionMaxActive, get " + connectionMaxActive);
         }
-        if (!"ignore".equalsIgnoreCase(conflictMode) && !"update".equalsIgnoreCase(conflictMode)&& !"upsert".equalsIgnoreCase(conflictMode)&& !"strict".equalsIgnoreCase(conflictMode)) {
+        if (!"ignore".equalsIgnoreCase(conflictMode) && !"update".equalsIgnoreCase(conflictMode) && !"upsert".equalsIgnoreCase(conflictMode) && !"strict".equalsIgnoreCase(conflictMode)) {
             throw new RuntimeException("invlid conflictMode, get " + conflictMode + " ,expected ignore/upsert/update/strict");
         }
         if (useCopy != 0 && useCopy != 1) {
-            throw new RuntimeException("invalid useCopy, get " + useCopy+" expected 0 or 1");
+            throw new RuntimeException("invalid useCopy, get " + useCopy + " expected 0 or 1");
         }
         if (targetSchema.length() == 0) {
             throw new RuntimeException("invalid targetschema, get " + targetSchema);
@@ -403,13 +401,13 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
             throw new RuntimeException("invlid exceptionMode, get " + exceptionMode + " ,expected ignore/strict");
         }
         if (reserveMS != 0 && reserveMS != 1) {
-            throw new RuntimeException("invalid reserveMS, get " + reserveMS+" expected 0 or 1");
+            throw new RuntimeException("invalid reserveMS, get " + reserveMS + " expected 0 or 1");
         }
         if (caseSensitive != 0 && caseSensitive != 1) {
-            throw new RuntimeException("invalid caseSensitive, get " + caseSensitive+" expected 0 or 1");
+            throw new RuntimeException("invalid caseSensitive, get " + caseSensitive + " expected 0 or 1");
         }
         if (writeMode != 0 && writeMode != 1 && writeMode != 2) {
-            throw new RuntimeException("invalid writeMode, get " + writeMode+" expected 0/1/2");
+            throw new RuntimeException("invalid writeMode, get " + writeMode + " expected 0/1/2");
         }
         if (verbose != 0 && verbose != 1) {
             throw new RuntimeException("invalid verbose, get " + verbose + ", expected 0 or 1");
@@ -434,7 +432,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
                                 String cache,
                                 int cacheSize,
                                 int cacheTTLMs,
-                                int verbose){
+                                int verbose) {
         if (!url.contains("jdbc:postgresql:")) {
             throw new RuntimeException("invalid url, get " + url + ", expected jdbc:postgresql://hostname:port/database");
         }
@@ -466,7 +464,7 @@ public class AdbpgDynamicTableFactory implements  DynamicTableSinkFactory, Dynam
             throw new RuntimeException("invalid targetschema, get " + targetSchema);
         }
         if (caseSensitive != 0 && caseSensitive != 1) {
-            throw new RuntimeException("invalid caseSensitive, get " + caseSensitive+" expected 0 or 1");
+            throw new RuntimeException("invalid caseSensitive, get " + caseSensitive + " expected 0 or 1");
         }
         if (joinMaxRows <= 0) {
             throw new RuntimeException("invalid joinMaxRows, get " + joinMaxRows);

@@ -1,0 +1,34 @@
+<!DOCTYPE suppressions PUBLIC "-//Puppy Crawl//DTD Suppressions 1.1//EN"
+        "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
+<suppressions>
+    <!-- Suppresses files in the src/test folder. To be used for rules which only apply to
+         production code. -->
+    <suppress files="[\\/]src[\\/]test[\\/].*|[\\/]generated-test-sources[\\/].*"
+              id="ProductionScope" />
+    <!-- Suppresses files in the src/main folder. To be used for rules which only apply to test
+         code. -->
+    <suppress files="[\\/]src[\\/]main[\\/].*|[\\/]generated-sources[\\/].*" id="TestScope" />
+
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]formats[\\/]avro[\\/]|[\\/]formats[\\/]io[\\/]RecordSpecificDeserializer.*|[\\/]formats[\\/]io[\\/]RecordSpecificSerializer.*" />
+    <suppress checks="[a-zA-Z0-9]*" files="Deprecated.*" />
+    <suppress checks="[a-zA-Z0-9]*" files="WhiteList.java" />
+    <suppress checks="[a-zA-Z0-9]*" files="CoreVersion.java" />
+
+    <!-- filter sql parser generator class -->
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]sqlparser[\\/]mysql/*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]sqlparser[\\/]postgresql/*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]engine[\\/]mysql/*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="AmpMySQLEngineCreateProduceTest.java"/>
+
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]csql[\\/]oracle/*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]csql[\\/]postgresql/*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]csql[\\/]tsql/*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="AmpADBEngine.java"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]capture[\\/]qrepl[\\/]format[\\/]data[\\/]decfloat[\\/].*"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]common[\\/]etl[\\/]interceptor[\\/]source[\\/].*"/>
+
+
+
+
+
+</suppressions>

@@ -22,16 +22,16 @@ public class AdbpgDynamicTableSink implements DynamicTableSink {
     private final String username;
     private final String password;
     private int fieldNum;
-    private String[]  fieldNamesStr;
+    private String[] fieldNamesStr;
     private String[] keyFields;
     private LogicalType[] lts;
-    private int retryWaitTime;;
+    private int retryWaitTime;
     private int batchSize;
     private int batchWriteTimeoutMs;
     private int maxRetryTime;
     private int connectionMaxActive;
     private String conflictMode;
-    private int  useCopy;
+    private int useCopy;
     private String targetSchema;
     private String exceptionMode;
     private int reserveMS;
@@ -88,6 +88,8 @@ public class AdbpgDynamicTableSink implements DynamicTableSink {
     public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
         return ChangelogMode.newBuilder()
                 .addContainedKind(RowKind.INSERT)
+                .addContainedKind(RowKind.DELETE)
+                .addContainedKind(RowKind.UPDATE_AFTER)
                 .build();
     }
 
