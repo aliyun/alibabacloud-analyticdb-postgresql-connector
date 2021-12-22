@@ -1,5 +1,9 @@
 package org.apache.flink.connector.jdbc.table;
 
+import org.apache.commons.lang3.time.FastDateFormat;
+import org.apache.flink.api.java.tuple.Tuple2;
+
+import javax.annotation.Nonnull;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -8,10 +12,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.annotation.Nonnull;
-import org.apache.commons.lang3.time.FastDateFormat;
-import org.apache.flink.api.java.tuple.Tuple2;
 
+/**
+ * DateUtil
+ */
 public class DateUtil {
     private static ConcurrentHashMap<String, FastDateFormat> sdfCache = new ConcurrentHashMap<String, FastDateFormat>() {
         {
@@ -34,7 +38,7 @@ public class DateUtil {
         }
 
         if (sdfCache.containsKey(key)) {
-            return (FastDateFormat)sdfCache.get(key);
+            return (FastDateFormat) sdfCache.get(key);
         } else {
             FastDateFormat sdf = FastDateFormat.getInstance(format, TimeZone.getTimeZone(timeZone));
             sdfCache.put(key, sdf);
@@ -90,8 +94,8 @@ public class DateUtil {
                 return false;
             }
 
-            range = (Tuple2)var3.next();
-        } while((Long)range.f0 > time || time > (Long)range.f1);
+            range = (Tuple2) var3.next();
+        } while ((Long) range.f0 > time || time > (Long) range.f1);
 
         return true;
     }

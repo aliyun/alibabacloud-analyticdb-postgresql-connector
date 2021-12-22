@@ -1,47 +1,79 @@
 package org.apache.flink.connector.jdbc.table;
 
+import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.pool.DruidPooledConnection;
+
 import org.apache.commons.io.Charsets;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.flink.api.common.io.RichOutputFormat;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.jdbc.table.metric.MetricUtils;
+import org.apache.flink.connector.jdbc.table.metric.SimpleGauge;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Meter;
 import org.apache.flink.shaded.guava18.com.google.common.base.Joiner;
-import org.apache.flink.table.data.*;
-import org.apache.flink.table.types.logical.*;
+import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.TimestampType;
+import org.apache.flink.table.types.logical.BooleanType;
+import org.apache.flink.table.types.logical.FloatType;
+import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.flink.table.types.logical.DateType;
+import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.TinyIntType;
+import org.apache.flink.table.types.logical.SmallIntType;
+import org.apache.flink.table.types.logical.DoubleType;
+import org.apache.flink.table.types.logical.CharType;
+import org.apache.flink.table.types.logical.BigIntType;
 import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.sql.*;
-import java.sql.Date;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Collection;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import com.alibaba.druid.pool.DruidDataSource;
-import com.alibaba.druid.pool.DruidPooledConnection;
 
-/*
- * AdbpgOutputFormat implementation
+/**
+ * ADBPG sink Implementation.
+ * create AdbpgOutputFormat for detail implementation
  */
 public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
-    private transient static final Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
+    public static final String CONNECTOR_TYPE = "adbpg-nightly";
+    private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
+    private static volatile boolean existsPrimaryKeys = false;
+    String[] fieldNamesStr;
+    LogicalType[] lts;
     private String url;
     private String tableName;
     private String userName;
     private String password;
-
     private Set<String> primaryKeys;
     private List<String> pkFields = new ArrayList<String>();
     private List<Integer> pkIndex = new ArrayList<>();
-    String[] fieldNamesStr;
-    LogicalType[] lts;
     private int fieldNum;
     private String fieldNames = null;
     private String fieldNamesCaseSensitive = null;
@@ -51,7 +83,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private String nonPrimaryFieldNamesCaseSensitive = null;
     private String excludedNonPrimaryFieldNames = null;
     private String excludedNonPrimaryFieldNamesCaseSensitive = null;
-
     // write policy
     private int maxRetryTime = 3;
     private int retryWaitTime = 100;
@@ -65,7 +96,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private String insertClause = "INSERT INTO ";
     private String timeZone = "Asia/Shanghai";
     private long inputCount = 0;
-
     // datasource
     private String driverClassName = "org.postgresql.Driver";
     private int connectionMaxActive = 5;
@@ -74,13 +104,11 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private int maxWait = 60000;
     private int removeAbandonedTimeout = 3 * 60;
     private boolean connectionTestWhileIdle = true;
-
     private transient DruidDataSource dataSource = null;
     private transient ScheduledExecutorService executorService;
     private transient Connection connection;
     private transient Statement statement;
     private boolean reserveMs = false;
-    private static volatile boolean existsPrimaryKeys = false;
     private String conflictMode = "ignore";
     private int useCopy = 0;
     private String targetSchema = "public";
@@ -89,29 +117,36 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private int writeMode = 0;
     private int verbose = 1;
 
+    //metric
+    private Meter outTps;
+    private Meter outBps;
+    private Counter sinkSkipCounter;
+    private SimpleGauge latencyGauge;
+    private transient Counter deleteCounter;
+
     public AdbpgOutputFormat(
-        String url,
-        String tablename,
-        String username,
-        String password,
-        int fieldNum,
-        String[] fieldNamesStr,
-        String[] keyFields,
-        LogicalType[] lts,
-        int retryWaitTime,
-        int batchSize,
-        int batchWriteTimeoutMs,
-        int maxRetryTime,
-        int connectionMaxActive,
-        String conflictMode,
-        int useCopy,
-        String targetSchema,
-        String exceptionMode,
-        int reserveMS,
-        int caseSensitive,
-        int writeMode,
-        int verbose
-     ) {
+            String url,
+            String tablename,
+            String username,
+            String password,
+            int fieldNum,
+            String[] fieldNamesStr,
+            String[] keyFields,
+            LogicalType[] lts,
+            int retryWaitTime,
+            int batchSize,
+            int batchWriteTimeoutMs,
+            int maxRetryTime,
+            int connectionMaxActive,
+            String conflictMode,
+            int useCopy,
+            String targetSchema,
+            String exceptionMode,
+            int reserveMS,
+            int caseSensitive,
+            int writeMode,
+            int verbose
+    ) {
         this.url = url;
         this.tableName = tablename;
         this.userName = username;
@@ -156,9 +191,30 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         }
     }
 
+    private static String toField(Object o) {
+        if (null == o) {
+            return "null";
+        }
+        String str = o.toString();
+        if (str.indexOf("'") >= 0) {
+            str = str.replaceAll("'", "''");
+        }
+        return "'" + str + "'";
+    }
+
+    private static String toCopyField(Object o) {
+        if (null == o) {
+            return "null";
+        }
+        String str = o.toString();
+        if (str.indexOf("\\") >= 0) {
+            str = str.replaceAll("\\\\", "\\\\\\\\");
+        }
+        return str;
+    }
+
     @Override
     public void configure(Configuration configuration) {
-
     }
 
     @Override
@@ -184,15 +240,14 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             dataSource.init();
         } catch (SQLException e) {
             LOG.error("Init DataSource Or Get Connection Error!", e);
-            throw new IOException("cannot get connection for url: " + url +", userName: " + userName +", password: " + password, e);
+            throw new IOException("cannot get connection for url: " + url + ", userName: " + userName + ", password: " + password, e);
         }
         if (primaryKeys == null || primaryKeys.isEmpty()) {
             existsPrimaryKeys = false;
             if (2 == this.writeMode) {
                 throw new RuntimeException("primary key cannot be empty when setting write mode to 2:upsert.");
             }
-        }
-        else {
+        } else {
             existsPrimaryKeys = true;
             Joiner joinerOnComma = Joiner.on(",").useForNull("null");
             String[] primaryFieldNamesStr = new String[primaryKeys.size()];
@@ -208,8 +263,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 if (primaryKeys.contains(fileName)) {
                     primaryFieldNamesStr[primaryIndex] = fileName;
                     primaryFieldNamesStrCaseSensitive[primaryIndex++] = "\"" + fileName + "\"";
-                }
-                else {
+                } else {
                     nonPrimaryFieldNamesStr[excludedIndex] = fileName;
                     nonPrimaryFieldNamesStrCaseSensitive[excludedIndex] = "\"" + fileName + "\"";
                     excludedNonPrimaryFieldNamesStr[excludedIndex] = "excluded." + fileName;
@@ -229,37 +283,43 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             @Override
             public void run() {
                 try {
-                    if(System.currentTimeMillis() - lastWriteTime >= batchWriteTimeout){
+                    if (System.currentTimeMillis() - lastWriteTime >= batchWriteTimeout) {
                         sync();
                     }
                 } catch (Exception e) {
                     LOG.error("flush buffer to ADBPG failed", e);
                 }
             }
-            }, batchWriteTimeout, batchWriteTimeout, TimeUnit.MILLISECONDS);
+        }, batchWriteTimeout, batchWriteTimeout, TimeUnit.MILLISECONDS);
 
-        LOG.info("sink connector created using url=" + url + ", " +
-                "tableName=" + tableName + ", " +
-                "userName=" + userName + ", " +
-                "password=" + password + ", " +
-                "maxRetries=" + maxRetryTime + ", " +
-                "retryWaitTime=" + retryWaitTime + ", " +
-                "batchSize=" + batchSize + ", " +
-                "connectionMaxActive=" + connectionMaxActive + ", " +
-                "batchWriteTimeoutMs=" + batchWriteTimeout + ", " +
-                "conflictMode=" + conflictMode + ", " +
-                "timeZone=" + timeZone + ", " +
-                "useCopy=" + useCopy + ", " +
-                "targetSchema=" + targetSchema + ", " +
-                "exceptionMode=" + exceptionMode + ", " +
-                "reserveMs=" + reserveMs + ", " +
-                "caseSensitive=" + caseSensitive + ", " +
-                "writeMode=" + writeMode + ", " +
-                "fieldNum=" + fieldNum + ", " +
-                "fieldNamesStr=" + Arrays.asList(fieldNamesStr).toString() + ", " +
-                "keyFields=" + pkFields.toString() + ", " +
-                "verbose=" + verbose + ", " +
-                "lts=" + Arrays.asList(lts).toString());
+        outTps = MetricUtils.registerNumRecordsOutRate(getRuntimeContext());
+        outBps = MetricUtils.registerNumBytesOutRate(getRuntimeContext(), CONNECTOR_TYPE);
+        latencyGauge = MetricUtils.registerCurrentSendTime(getRuntimeContext());
+        sinkSkipCounter = MetricUtils.registerNumRecordsOutErrors(getRuntimeContext());
+        deleteCounter = MetricUtils.registerSinkDeleteCounter(getRuntimeContext());
+
+        LOG.info("sink connector created using url=" + url + ", "
+                + "tableName=" + tableName + ", "
+                + "userName=" + userName + ", "
+                + "password=" + password + ", "
+                + "maxRetries=" + maxRetryTime + ", "
+                + "retryWaitTime=" + retryWaitTime + ", "
+                + "batchSize=" + batchSize + ", "
+                + "connectionMaxActive=" + connectionMaxActive + ", "
+                + "batchWriteTimeoutMs=" + batchWriteTimeout + ", "
+                + "conflictMode=" + conflictMode + ", "
+                + "timeZone=" + timeZone + ", "
+                + "useCopy=" + useCopy + ", "
+                + "targetSchema=" + targetSchema + ", "
+                + "exceptionMode=" + exceptionMode + ", "
+                + "reserveMs=" + reserveMs + ", "
+                + "caseSensitive=" + caseSensitive + ", "
+                + "writeMode=" + writeMode + ", "
+                + "fieldNum=" + fieldNum + ", "
+                + "fieldNamesStr=" + Arrays.asList(fieldNamesStr).toString() + ", "
+                + "keyFields=" + pkFields.toString() + ", "
+                + "verbose=" + verbose + ", "
+                + "lts=" + Arrays.asList(lts).toString());
     }
 
     @Override
@@ -267,7 +327,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         if (null == record) {
             return;
         }
-        RowData  rowData = copyRowData(record);
+        RowData rowData = copyRowData(record);
         inputCount++;
         if (existsPrimaryKeys) {
             synchronized (mapBuffer) {
@@ -275,8 +335,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 String dupKey = constructDupKey(rowData, pkIndex);
                 mapBuffer.put(dupKey, new Tuple2<>(true, rowData));
             }
-        }
-        else {
+        } else {
             synchronized (mapBufferWithoutPk) {
                 // Add row to list when primary key does not exist
                 mapBufferWithoutPk.add(new Tuple2<>(true, rowData));
@@ -293,48 +352,35 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private RowData copyRowData(RowData row) {
         //LOG.info("Data received:" + row.toString());
         GenericRowData rowData = new GenericRowData(row.getArity());
-        for (int i = 0; i < row.getArity(); i++){
+        for (int i = 0; i < row.getArity(); i++) {
             LogicalType t = lts[i];
             if (t instanceof BooleanType) {
                 rowData.setField(i, new Boolean(row.getBoolean(i)));
-            }
-            else if (t instanceof TimestampType){
-                TimestampType datatype  = (TimestampType) t;
+            } else if (t instanceof TimestampType) {
+                TimestampType datatype = (TimestampType) t;
                 TimestampData timedata = row.getTimestamp(i, datatype.getPrecision());
                 rowData.setField(i, TimestampData.fromTimestamp(timedata.toTimestamp()));
-            }
-            else if (t instanceof VarCharType || t instanceof  CharType) {
+            } else if (t instanceof VarCharType || t instanceof CharType) {
                 rowData.setField(i, row.getString(i));
-            }
-            else if (t instanceof FloatType) {
+            } else if (t instanceof FloatType) {
                 rowData.setField(i, new Float(row.getFloat(i)));
-            }
-            else if (t instanceof DoubleType) {
+            } else if (t instanceof DoubleType) {
                 rowData.setField(i, new Double(row.getDouble(i)));
-            }
-            else if (t instanceof IntType) {
+            } else if (t instanceof IntType) {
                 rowData.setField(i, new Integer(row.getInt(i)));
-            }
-            else if (t instanceof SmallIntType) {
+            } else if (t instanceof SmallIntType) {
                 rowData.setField(i, new Short(row.getShort(i)));
-            }
-            else if (t instanceof TinyIntType) {
+            } else if (t instanceof TinyIntType) {
                 rowData.setField(i, new Byte(row.getByte(i)));
-            }
-            else if (t instanceof BigIntType) {
+            } else if (t instanceof BigIntType) {
                 rowData.setField(i, new Long(row.getLong(i)));
-            }
-            else if (t instanceof DateType)
-            {
+            } else if (t instanceof DateType) {
                 rowData.setField(i, new Integer(row.getInt(i)));
-            }
-            else if (t instanceof DecimalType)
-            {
-                DecimalType data  = (DecimalType) t;
+            } else if (t instanceof DecimalType) {
+                DecimalType data = (DecimalType) t;
                 DecimalData decimalData = row.getDecimal(i, data.getPrecision(), data.getScale());
                 rowData.setField(i, decimalData.copy());
-            }
-            else {
+            } else {
                 throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
             }
         }
@@ -343,7 +389,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
 
     private String constructDupKey(RowData row, List<Integer> pkIndex) {
         String dupKey = "";
-        for (int i: pkIndex) {
+        for (int i : pkIndex) {
             if (row.isNullAt(i)) {
                 dupKey += "null#";
                 continue;
@@ -353,38 +399,27 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             if (t instanceof BooleanType) {
                 boolean value = row.getBoolean(i);
                 valuestr = value ? "'true'" : "'false'";
-            }
-            else if (t instanceof TimestampType){
+            } else if (t instanceof TimestampType) {
                 Timestamp value = row.getTimestamp(i, 8).toTimestamp();
                 valuestr = "'" + DateUtil.timeStamp2String((Timestamp) value, timeZone, reserveMs) + "'";
-            }
-            else if (t instanceof VarCharType || t instanceof  CharType) {
+            } else if (t instanceof VarCharType || t instanceof CharType) {
                 valuestr = toField(row.getString(i).toString());
-            }
-            else if (t instanceof FloatType) {
+            } else if (t instanceof FloatType) {
                 valuestr = row.getFloat(i) + "";
-            }
-            else if (t instanceof DoubleType) {
+            } else if (t instanceof DoubleType) {
                 valuestr = row.getDouble(i) + "";
-            }
-            else if (t instanceof IntType) {
+            } else if (t instanceof IntType) {
                 valuestr = row.getInt(i) + "";
-            }
-            else if (t instanceof SmallIntType) {
+            } else if (t instanceof SmallIntType) {
                 valuestr = row.getShort(i) + "";
-            }
-            else if (t instanceof TinyIntType) {
+            } else if (t instanceof TinyIntType) {
                 valuestr = row.getByte(i) + "";
-            }
-            else if (t instanceof BigIntType) {
+            } else if (t instanceof BigIntType) {
                 valuestr = row.getLong(i) + "";
-            }
-            else if (t instanceof DecimalType)
-            {
+            } else if (t instanceof DecimalType) {
                 DecimalType dt = (DecimalType) t;
                 valuestr = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
-            }
-            else {
+            } else {
                 throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
             }
             dupKey += valuestr + "#";
@@ -395,12 +430,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     @Override
     public void close() throws IOException {
         sync();
-        if (dataSource != null && !dataSource.isClosed()){
-                dataSource.close();
-                dataSource = null;
+        if (dataSource != null && !dataSource.isClosed()) {
+            dataSource.close();
+            dataSource = null;
         }
     }
-    public void sync(){
+
+    public void sync() {
         if (1 == verbose) {
             LOG.info("start to sync " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
         }
@@ -419,6 +455,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 }
                 batchWrite(addBuffer);
             }
+            if (1 == verbose) {
+                LOG.info("finished syncing " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+            }
             // Clear mapBuffer and mapBufferWithoutPk
             mapBuffer.clear();
             mapBufferWithoutPk.clear();
@@ -427,16 +466,26 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         }
     }
 
+    private void reportMetric(List<RowData> rows, long start, long end) {
+        if (latencyGauge != null) {
+            latencyGauge.report(end - start, rows.size());
+        }
+        if (outTps != null) {
+            outTps.markEvent(rows.size());
+        }
+    }
+
     private void batchWrite(List<RowData> rows) {
-        if (null == rows || rows.size() == 0){
-            return ;
+        if (null == rows || rows.size() == 0) {
+            return;
         }
         try {
+            long start = System.currentTimeMillis();
             if (writeMode == 1) {
                 StringBuilder stringBuilder = new StringBuilder();
                 for (RowData row : rows) {
                     String[] fields = writeCopyFormat(lts, row, timeZone, reserveMs);
-                    for(int i = 0; i < fields.length; i++) {
+                    for (int i = 0; i < fields.length; i++) {
                         stringBuilder.append(fields[i]);
                         stringBuilder.append(i == fields.length - 1 ? "\r\n" : "\t");
                     }
@@ -444,8 +493,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 byte[] data = stringBuilder.toString().getBytes(Charsets.UTF_8);
                 InputStream inputStream = new ByteArrayInputStream(data);
                 executeCopy(inputStream);
-            }
-            else if (writeMode == 2){
+            } else if (writeMode == 2) {
                 List<String> valueList = new ArrayList<String>();
                 String[] fields;
                 for (RowData row : rows) {
@@ -455,22 +503,25 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
 
                 StringBuilder sb = new StringBuilder();
                 if (caseSensitive) {
-                    sb.append(insertClause).append("\"").append(targetSchema).append("\"").append(".").append("\"").append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
-                }
-                else {
-                    sb.append(insertClause).append(targetSchema).append(".").append(tableName).append(" (" + fieldNames + " ) values ");
+                    sb.append(insertClause).append("\"").append(targetSchema).append("\"").append(".").append("\"")
+                                    .append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
+                } else {
+                    sb.append(insertClause).append(targetSchema).append(".").append(tableName)
+                                    .append(" (" + fieldNames + " ) values ");
                 }
 
                 sb.append(StringUtils.join(valueList, ","));
                 if (caseSensitive) {
-                    sb.append(" on conflict(").append(primaryFieldNamesCaseSensitive).append(") ").append(" do update set (").append(nonPrimaryFieldNamesCaseSensitive).append(")=(").append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
-                }
-                else {
-                    sb.append(" on conflict(").append(primaryFieldNames).append(") ").append(" do update set (").append(nonPrimaryFieldNames).append(")=(").append(excludedNonPrimaryFieldNames).append(")");
+                    sb.append(" on conflict(").append(primaryFieldNamesCaseSensitive).append(") ")
+                                    .append(" do update set (").append(nonPrimaryFieldNamesCaseSensitive)
+                                    .append(")=(").append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
+                } else {
+                    sb.append(" on conflict(").append(primaryFieldNames).append(") ").append(" do update set (")
+                                    .append(nonPrimaryFieldNames).append(")=(").append(excludedNonPrimaryFieldNames)
+                            .append(")");
                 }
                 executeSql(sb.toString());
-            }
-            else {
+            } else {
                 List<String> valueList = new ArrayList<String>();
                 String[] fields;
                 for (RowData row : rows) {
@@ -479,20 +530,23 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 }
                 StringBuilder sb = new StringBuilder();
                 if (caseSensitive) {
-                    sb.append(insertClause).append("\"").append(targetSchema).append("\"").append(".").append("\"").append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
-                }
-                else {
+                    sb.append(insertClause).append("\"").append(targetSchema).append("\"").append(".").append("\"")
+                            .append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
+                } else {
                     sb.append(insertClause).append(targetSchema).append(".").append(tableName).append(" (" + fieldNames + " ) values ");
                 }
                 String sql = sb.toString() + StringUtils.join(valueList, ",");
                 LOG.info("Sql generate:" + sql);
                 executeSql(sql);
             }
+            long end = System.currentTimeMillis();
+            reportMetric(rows, start, end);
         } catch (Exception e) {
+            long start = System.currentTimeMillis();
             LOG.warn("execute sql error:", e);
             // Batch upsert demotes to single upsert when conflictMode='upsert' or writeMode=2
-            if (existsPrimaryKeys &&
-                    (writeMode == 2 || (
+            if (existsPrimaryKeys
+                    && (writeMode == 2 || (
                             e.getMessage() != null
                                     && e.getMessage().indexOf("duplicate key") != -1
                                     && e.getMessage().indexOf("violates unique constraint") != -1
@@ -501,8 +555,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 for (RowData row : rows) {
                     upsertRow(row);
                 }
-            }
-            else {
+            } else {
                 LOG.warn("batch insert failed, will try to insert msgs one by one");
                 for (RowData row : rows) {
                     String insertSQL = getInsertSQL(row);
@@ -519,12 +572,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                                 throw new RuntimeException("duplicate key value violates unique constraint");
                             } else if ("update".equalsIgnoreCase(conflictMode)) {
                                 updateRow(row);
-                            }
-                            else if ("upsert".equalsIgnoreCase(conflictMode) || (2 == writeMode)) {
+                            } else if ("upsert".equalsIgnoreCase(conflictMode) || (2 == writeMode)) {
                                 upsertRow(row);
                             }
-                        }
-                        else {
+                        } else {
                             if ("strict".equalsIgnoreCase(exceptionMode)) {
                                 throw new RuntimeException(insertException);
                             }
@@ -532,15 +583,17 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                     }
                 }
             }
+            long end = System.currentTimeMillis();
+            reportMetric(rows, start, end);
         }
     }
+
     private String getInsertSQL(RowData row) {
         StringBuilder sb1 = new StringBuilder();
         String[] singleFields = writeFormat(lts, row, timeZone, reserveMs);
         if (caseSensitive) {
             sb1.append(insertClause).append("\"").append(targetSchema).append("\"").append(".").append("\"").append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
-        }
-        else {
+        } else {
             sb1.append(insertClause).append(targetSchema).append(".").append(tableName).append(" (" + fieldNames + " ) values ");
         }
         sb1.append("(" + StringUtils.join(singleFields, ",") + ")");
@@ -560,8 +613,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             } catch (SQLException e) {
                 //e.printStackTrace();
                 closeConnection();
-                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1 &&
-                        e.getMessage().indexOf("violates unique constraint") != -1) ||retryTime >= maxRetryTime - 1) {
+                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1
+                        && e.getMessage().indexOf("violates unique constraint") != -1) || retryTime >= maxRetryTime - 1) {
                     throw e;
                 }
                 try {
@@ -575,7 +628,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     }
 
     private void executeCopy(InputStream inputStream) throws SQLException, IOException {
-        if (inputStream == null){
+        if (inputStream == null) {
             return;
         }
         inputStream.mark(0);
@@ -589,17 +642,23 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 rawConn = dataSource.getConnection();
                 baseConn = (BaseConnection) (rawConn.getConnection());
                 CopyManager manager = new CopyManager(baseConn);
+                StringBuffer sb = new StringBuffer();
                 if (caseSensitive) {
-                    manager.copyIn("COPY \"" + targetSchema + "\".\"" + tableName + "\"( " +fieldNamesCaseSensitive +" )" + " from STDIN", inputStream);
+                    sb.append("COPY \"" + targetSchema + "\".\"" + tableName + "\"( " + fieldNamesCaseSensitive + " )" + " from STDIN");
+                } else {
+                    sb.append("COPY " + targetSchema + "." + tableName + "( " + fieldNames + " )" + " from STDIN");
                 }
-                else {
-                    manager.copyIn("COPY " + targetSchema + "." + tableName + "( " +fieldNames +" )" + " from STDIN", inputStream);
+                if ("ignore".equalsIgnoreCase(conflictMode)) {
+                    sb.append(" DO on conflict DO nothing");
+                } else {
+                    sb.append(" DO on conflict DO update");
                 }
+                manager.copyIn(sb.toString(), inputStream);
                 break;
             } catch (SQLException e) {
-                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1 &&
-                        e.getMessage().indexOf("violates unique constraint") != -1) ||
-                        retryTime >= maxRetryTime - 1) {
+                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1
+                        && e.getMessage().indexOf("violates unique constraint") != -1)
+                        || retryTime >= maxRetryTime - 1) {
                     throw e;
                 }
                 try {
@@ -608,8 +667,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                     LOG.error("Thread sleep exception in AdbpgOutputFormat class", e1);
                 }
             } catch (IOException e) {
-                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1 &&
-                        e.getMessage().indexOf("violates unique constraint") != -1) || retryTime >= maxRetryTime - 1) {
+                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1
+                        && e.getMessage().indexOf("violates unique constraint") != -1) || retryTime >= maxRetryTime - 1) {
                     throw e;
                 }
                 try {
@@ -617,8 +676,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 } catch (Exception e1) {
                     LOG.error("Thread sleep exception in AdbpgOutputFormat class", e1);
                 }
-            }
-            finally {
+            } finally {
                 if (rawConn != null) {
                     if (!rawConn.isClosed()) {
                         rawConn.close();
@@ -630,7 +688,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 // We should close and discard druid connection firstly, then close base connection.
                 // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
                 if (baseConn != null) {
-                    if (!baseConn.isClosed()){
+                    if (!baseConn.isClosed()) {
                         baseConn.close();
                     }
                 }
@@ -638,16 +696,16 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         }
     }
 
-    private void updateRow(RowData row){
+    private void updateRow(RowData row) {
         //get non primary keys
         String[] allFields = fieldNamesStr;
         Set<String> nonPrimaryKeys = new HashSet<String>();
-        for(String field : allFields){
-            if(!primaryKeys.contains(field)){
+        for (String field : allFields) {
+            if (!primaryKeys.contains(field)) {
                 nonPrimaryKeys.add(field);
             }
         }
-        if(nonPrimaryKeys.size() == 0){
+        if (nonPrimaryKeys.size() == 0) {
             return;
         }
         // Throw exception when primary filed in null
@@ -661,21 +719,19 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
 
         StringBuilder sql = new StringBuilder();
         if (caseSensitive) {
-            sql.append("UPDATE \"").append(targetSchema).append("\".\"").append(tableName).append("\" SET ").append(setStatement).append(" WHERE ").append(whereStatement);
-
+            sql.append("UPDATE \"").append(targetSchema).append("\".\"").append(tableName).append("\" SET ")
+                            .append(setStatement).append(" WHERE ").append(whereStatement);
+        } else {
+            sql.append("UPDATE ").append(targetSchema).append(".").append(tableName).append(" SET ")
+                            .append(setStatement).append(" WHERE ").append(whereStatement);
         }
-        else {
-            sql.append("UPDATE ").append(targetSchema).append(".").append(tableName).append(" SET ").append(setStatement).append(" WHERE ").append(whereStatement);
-        }
-        try{
+        try {
             executeSql(sql.toString());
-        } catch (SQLException updateException){
-            LOG.error("Exception in update sql: "+sql.toString(), updateException);
+        } catch (SQLException updateException) {
+            LOG.error("Exception in update sql: " + sql.toString(), updateException);
             try {
                 executeSql(getInsertSQL(row));
-            }
-            catch (SQLException e) {
-
+            } catch (SQLException e) {
             }
         }
     }
@@ -684,14 +740,17 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         StringBuffer sb = new StringBuffer();
         sb.append(getInsertSQL(row));
         if (caseSensitive) {
-            sb.append(" on conflict(").append(primaryFieldNamesCaseSensitive).append(") ").append(" do update set (").append(nonPrimaryFieldNamesCaseSensitive).append(")=(").append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
+            sb.append(" on conflict(").append(primaryFieldNamesCaseSensitive).append(") ").append(" do update set (")
+                    .append(nonPrimaryFieldNamesCaseSensitive).append(")=(")
+                            .append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
+        } else {
+            sb.append(" on conflict(").append(primaryFieldNames).append(") ")
+                    .append(" do update set (").append(nonPrimaryFieldNames).append(")=(")
+                            .append(excludedNonPrimaryFieldNames).append(")");
         }
-        else {
-            sb.append(" on conflict(").append(primaryFieldNames).append(") ").append(" do update set (").append(nonPrimaryFieldNames).append(")=(").append(excludedNonPrimaryFieldNames).append(")");
-        }
-        try{
+        try {
             executeSql(sb.toString());
-        } catch (SQLException upsertException){
+        } catch (SQLException upsertException) {
             LOG.error("Exception in upsert sql: " + sb.toString(), upsertException);
             if ("strict".equalsIgnoreCase(exceptionMode)) {
                 throw new RuntimeException(upsertException);
@@ -713,7 +772,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             connection = dataSource.getConnection();
             statement = connection.createStatement();
         } catch (SQLException e) {
-            LOG.error("Init DataSource Or Get Connection Error!" , e);
+            LOG.error("Init DataSource Or Get Connection Error!", e);
             throw new RuntimeException(e);
         }
     }
@@ -738,27 +797,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             connection = null;
         }
     }
-    private static String toField(Object o) {
-        if (null == o) {
-            return "null";
-        }
-        String str = o.toString();
-        if (str.indexOf("'") >= 0) {
-            str = str.replaceAll("'", "''");
-        }
-        return "'" + str + "'";
-    }
-
-    private static String toCopyField(Object o) {
-        if (null == o) {
-            return "null";
-        }
-        String str = o.toString();
-        if (str.indexOf("\\") >= 0) {
-            str = str.replaceAll("\\\\", "\\\\\\\\");
-        }
-        return str;
-    }
 
     private String[] writeFormat(LogicalType[] lts, RowData row, String timeZone, boolean reserveMs) {
         String[] output = new String[row.getArity()];
@@ -769,47 +807,35 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             }
             LogicalType t = lts[i];
             if (t instanceof BooleanType) {
-                    boolean value = row.getBoolean(i);
-                    output[i] = value ? "'true'" : "'false'";
-            }
-            else if (t instanceof TimestampType){
-                    TimestampType dt = (TimestampType) t;
-                    Timestamp value = row.getTimestamp(i, dt.getPrecision()).toTimestamp();
-                    output[i] = "'" + DateUtil.timeStamp2String((Timestamp)value, timeZone, reserveMs) + "'";
-            }
-            else if (t instanceof DateType){
-                    int datanum = row.getInt(i);
-                    DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    output[i] = "'" +  ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
-            }
-            else if (t instanceof VarCharType || t instanceof  CharType) {
-                    output[i] = toField(row.getString(i).toString());
-            }
-            else if (t instanceof FloatType) {
-                    output[i] = row.getFloat(i) + "";
-            }
-            else if (t instanceof DoubleType) {
-                    output[i] = row.getDouble(i) + "";
-            }
-            else if (t instanceof IntType) {
-                    output[i] = row.getInt(i) + "";
-            }
-            else if (t instanceof SmallIntType) {
-                    output[i] = row.getShort(i) + "";
-            }
-            else if (t instanceof TinyIntType) {
-                    output[i] = row.getByte(i) + "";
-            }
-            else if (t instanceof BigIntType) {
-                    output[i] = row.getLong(i) + "";
-            }
-            else if (t instanceof DecimalType)
-            {
-                    DecimalType dt = (DecimalType) t;
-                    output[i] = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
-            }
-            else {
-                    throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                boolean value = row.getBoolean(i);
+                output[i] = value ? "'true'" : "'false'";
+            } else if (t instanceof TimestampType) {
+                TimestampType dt = (TimestampType) t;
+                Timestamp value = row.getTimestamp(i, dt.getPrecision()).toTimestamp();
+                output[i] = "'" + DateUtil.timeStamp2String((Timestamp) value, timeZone, reserveMs) + "'";
+            } else if (t instanceof DateType) {
+                int datanum = row.getInt(i);
+                DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                output[i] = "'" + ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
+            } else if (t instanceof VarCharType || t instanceof CharType) {
+                output[i] = toField(row.getString(i).toString());
+            } else if (t instanceof FloatType) {
+                output[i] = row.getFloat(i) + "";
+            } else if (t instanceof DoubleType) {
+                output[i] = row.getDouble(i) + "";
+            } else if (t instanceof IntType) {
+                output[i] = row.getInt(i) + "";
+            } else if (t instanceof SmallIntType) {
+                output[i] = row.getShort(i) + "";
+            } else if (t instanceof TinyIntType) {
+                output[i] = row.getByte(i) + "";
+            } else if (t instanceof BigIntType) {
+                output[i] = row.getLong(i) + "";
+            } else if (t instanceof DecimalType) {
+                DecimalType dt = (DecimalType) t;
+                output[i] = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
+            } else {
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
             }
         }
         return output;
@@ -824,47 +850,35 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             }
             LogicalType t = lts[i];
             if (t instanceof BooleanType) {
-                    boolean value = row.getBoolean(i);
-                    output[i] = value ? "'true'" : "'false'";
-            }
-            else if (t instanceof TimestampType){
-                    TimestampType dt = (TimestampType) t;
-                    Timestamp value = row.getTimestamp(i, dt.getPrecision()).toTimestamp();
-                    output[i] = "'" + DateUtil.timeStamp2String((Timestamp)value, timeZone, reserveMs) + "'";
-            }
-            else if (t instanceof DateType){
-                    int datanum = row.getInt(i);
-                    DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    output[i] = "'" +  ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
-            }
-            else if (t instanceof VarCharType || t instanceof  CharType) {
-                    output[i] = toCopyField(row.getString(i).toString());
-            }
-            else if (t instanceof FloatType) {
-                    output[i] = row.getFloat(i) + "";
-            }
-            else if (t instanceof DoubleType) {
-                    output[i] = row.getDouble(i) + "";
-            }
-            else if (t instanceof IntType) {
-                    output[i] = row.getInt(i) + "";
-            }
-            else if (t instanceof SmallIntType) {
-                    output[i] = row.getShort(i) + "";
-            }
-            else if (t instanceof TinyIntType) {
-                    output[i] = row.getByte(i) + "";
-            }
-            else if (t instanceof BigIntType) {
-                    output[i] = row.getLong(i) + "";
-            }
-            else if (t instanceof DecimalType)
-            {
+                boolean value = row.getBoolean(i);
+                output[i] = value ? "'true'" : "'false'";
+            } else if (t instanceof TimestampType) {
+                TimestampType dt = (TimestampType) t;
+                Timestamp value = row.getTimestamp(i, dt.getPrecision()).toTimestamp();
+                output[i] = "'" + DateUtil.timeStamp2String((Timestamp) value, timeZone, reserveMs) + "'";
+            } else if (t instanceof DateType) {
+                int datanum = row.getInt(i);
+                DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                output[i] = "'" + ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
+            } else if (t instanceof VarCharType || t instanceof CharType) {
+                output[i] = toCopyField(row.getString(i).toString());
+            } else if (t instanceof FloatType) {
+                output[i] = row.getFloat(i) + "";
+            } else if (t instanceof DoubleType) {
+                output[i] = row.getDouble(i) + "";
+            } else if (t instanceof IntType) {
+                output[i] = row.getInt(i) + "";
+            } else if (t instanceof SmallIntType) {
+                output[i] = row.getShort(i) + "";
+            } else if (t instanceof TinyIntType) {
+                output[i] = row.getByte(i) + "";
+            } else if (t instanceof BigIntType) {
+                output[i] = row.getLong(i) + "";
+            } else if (t instanceof DecimalType) {
                 DecimalType dt = (DecimalType) t;
                 output[i] = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
-            }
-            else {
-                    throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+            } else {
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
             }
         }
         return output;
@@ -887,53 +901,40 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             LogicalType t = lts[i];
             String valuestr;
             if (t instanceof BooleanType) {
-                    boolean value = row.getBoolean(i);
-                    valuestr = value ? "'true'" : "'false'";
-            }
-            else if (t instanceof TimestampType){
-                    TimestampType dt = (TimestampType) t;
-                    Timestamp value = row.getTimestamp(i, dt.getPrecision()).toTimestamp();
-                    valuestr = "'" + DateUtil.timeStamp2String((Timestamp)value, timeZone, reserveMs) + "'";
-            }
-            else if (t instanceof DateType){
-                    int datanum = row.getInt(i);
-                    DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    valuestr = "'" +  ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
-            }
-            else if (t instanceof VarCharType || t instanceof  CharType) {
-                    valuestr = toField(row.getString(i).toString());
-            }
-            else if (t instanceof FloatType) {
-                    valuestr = row.getFloat(i) + "";
-            }
-            else if (t instanceof DoubleType) {
-                    valuestr = row.getDouble(i) + "";
-            }
-            else if (t instanceof IntType) {
-                    valuestr = row.getInt(i) + "";
-            }
-            else if (t instanceof SmallIntType) {
-                    valuestr = row.getShort(i) + "";
-            }
-            else if (t instanceof TinyIntType) {
-                    valuestr = row.getByte(i) + "";
-            }
-            else if (t instanceof BigIntType) {
-                    valuestr = row.getLong(i) + "";
-            }
-            else if (t instanceof DecimalType)
-            {
-                    DecimalType dt = (DecimalType) t;
-                    valuestr = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
-            }
-            else {
-                    throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                boolean value = row.getBoolean(i);
+                valuestr = value ? "'true'" : "'false'";
+            } else if (t instanceof TimestampType) {
+                TimestampType dt = (TimestampType) t;
+                Timestamp value = row.getTimestamp(i, dt.getPrecision()).toTimestamp();
+                valuestr = "'" + DateUtil.timeStamp2String((Timestamp) value, timeZone, reserveMs) + "'";
+            } else if (t instanceof DateType) {
+                int datanum = row.getInt(i);
+                DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                valuestr = "'" + ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
+            } else if (t instanceof VarCharType || t instanceof CharType) {
+                valuestr = toField(row.getString(i).toString());
+            } else if (t instanceof FloatType) {
+                valuestr = row.getFloat(i) + "";
+            } else if (t instanceof DoubleType) {
+                valuestr = row.getDouble(i) + "";
+            } else if (t instanceof IntType) {
+                valuestr = row.getInt(i) + "";
+            } else if (t instanceof SmallIntType) {
+                valuestr = row.getShort(i) + "";
+            } else if (t instanceof TinyIntType) {
+                valuestr = row.getByte(i) + "";
+            } else if (t instanceof BigIntType) {
+                valuestr = row.getLong(i) + "";
+            } else if (t instanceof DecimalType) {
+                DecimalType dt = (DecimalType) t;
+                valuestr = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
+            } else {
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
             }
             if (caseSensitive) {
-                    output[keyIndex] = "\"" + colName + "\" = " + valuestr;
-            }
-            else {
-                    output[keyIndex] = colName  + " = " + valuestr;
+                output[keyIndex] = "\"" + colName + "\" = " + valuestr;
+            } else {
+                output[keyIndex] = colName + " = " + valuestr;
             }
             keyIndex++;
         }

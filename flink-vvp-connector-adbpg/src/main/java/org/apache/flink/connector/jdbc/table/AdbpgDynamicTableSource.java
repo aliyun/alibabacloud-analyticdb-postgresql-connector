@@ -5,9 +5,9 @@ import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.util.Preconditions;
+
 import java.util.Arrays;
 import java.util.List;
-import static org.apache.flink.util.Preconditions.checkArgument;
 
 /**
  * ADBPG Source Implementation.
@@ -20,9 +20,9 @@ public class AdbpgDynamicTableSource implements LookupTableSource {
     private final String username;
     private final String password;
     private int fieldNum;
-    private String[]  fieldNamesStr;
+    private String[] fieldNamesStr;
     private LogicalType[] lts;
-    private int retryWaitTime;;
+    private int retryWaitTime;
     private int batchWriteTimeoutMs;
     private int maxRetryTime;
     private int connectionMaxActive;
@@ -35,8 +35,11 @@ public class AdbpgDynamicTableSource implements LookupTableSource {
     private int cacheTTLMs;
     private int verbose;
 
-    public AdbpgDynamicTableSource(String url, String tablename, String username, String password, int fieldNum, String[] fieldNamesStr, LogicalType[] lts, int retryWaitTime, int batchWriteTimeoutMs, int maxRetryTime, int connectionMaxActive, String exceptionMode, String targetSchema, int caseSensitive, int joinMaxRows, String cache, int cacheSize, int cacheTTLMs, int verbose)
-    {
+    public AdbpgDynamicTableSource(String url, String tablename, String username, String password, int fieldNum,
+                                   String[] fieldNamesStr, LogicalType[] lts, int retryWaitTime, int batchWriteTimeoutMs,
+                                   int maxRetryTime, int connectionMaxActive, String exceptionMode, String targetSchema,
+                                   int caseSensitive, int joinMaxRows, String cache, int cacheSize, int cacheTTLMs,
+                                   int verbose) {
         this.url = url;
         this.tablename = tablename;
         this.username = username;
@@ -70,15 +73,14 @@ public class AdbpgDynamicTableSource implements LookupTableSource {
         List<String> nameList = Arrays.asList(fieldNamesStr);
         LogicalType[] keyTypes =
                 Arrays.stream(keyNames)
-                        .map(
-                                s -> {
-                                    checkArgument(
+                        .map(s -> {
+                            Preconditions.checkArgument(
                                             nameList.contains(s),
                                             "keyName %s can't find in fieldNames %s.",
                                             s,
                                             nameList);
-                                    return lts[nameList.indexOf(s)];
-                                })
+                            return lts[nameList.indexOf(s)];
+                        })
                         .toArray(LogicalType[]::new);
 
         return TableFunctionProvider.of(
