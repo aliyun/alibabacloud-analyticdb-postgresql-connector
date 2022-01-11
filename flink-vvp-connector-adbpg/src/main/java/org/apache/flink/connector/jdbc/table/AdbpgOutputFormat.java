@@ -7,10 +7,12 @@ import org.apache.commons.io.Charsets;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.flink.api.common.io.RichOutputFormat;
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.jdbc.table.metric.MetricUtils;
 import org.apache.flink.connector.jdbc.table.metric.SimpleGauge;
+import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
+import org.apache.flink.connector.jdbc.table.utils.DateUtil;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.shaded.guava18.com.google.common.base.Joiner;
@@ -18,19 +20,20 @@ import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
-import org.apache.flink.table.types.logical.DecimalType;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.BooleanType;
-import org.apache.flink.table.types.logical.FloatType;
-import org.apache.flink.table.types.logical.VarCharType;
-import org.apache.flink.table.types.logical.DateType;
-import org.apache.flink.table.types.logical.IntType;
-import org.apache.flink.table.types.logical.TinyIntType;
-import org.apache.flink.table.types.logical.SmallIntType;
-import org.apache.flink.table.types.logical.DoubleType;
-import org.apache.flink.table.types.logical.CharType;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.BigIntType;
+import org.apache.flink.table.types.logical.BooleanType;
+import org.apache.flink.table.types.logical.CharType;
+import org.apache.flink.table.types.logical.DateType;
+import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.DoubleType;
+import org.apache.flink.table.types.logical.FloatType;
+import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.SmallIntType;
+import org.apache.flink.table.types.logical.TimestampType;
+import org.apache.flink.table.types.logical.TinyIntType;
+import org.apache.flink.table.types.logical.VarCharType;
 import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
@@ -45,23 +48,29 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
 
 /**
  * ADBPG sink Implementation.
  * create AdbpgOutputFormat for detail implementation
  */
 public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
+
+    private final ReadableConfig config;
     public static final String CONNECTOR_TYPE = "adbpg-nightly";
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
     private static volatile boolean existsPrimaryKeys = false;
@@ -90,9 +99,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private long batchWriteTimeout = 5000;
     private long lastWriteTime = 0;
     // Use HashMap mapBuffer for data with primary key to preserve order
-    private Map<String, Tuple2<Boolean, RowData>> mapBuffer = new HashMap<>();
+    private Map<String, RowData> mapBuffer = new HashMap<>();
     // Use HashMap mapBufferWithoutPk for data without primary key
-    private List<Tuple2<Boolean, RowData>> mapBufferWithoutPk = new ArrayList<>();
+    private List<RowData> mapBufferWithoutPk = new ArrayList<>();
     private String insertClause = "INSERT INTO ";
     private String timeZone = "Asia/Shanghai";
     private long inputCount = 0;
@@ -113,6 +122,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private int useCopy = 0;
     private String targetSchema = "public";
     private String exceptionMode = "ignore";
+    private final String DELETE_WITH_KEY_SQL_TPL = "DELETE FROM %s WHERE %s ";
     private boolean caseSensitive = false;
     private int writeMode = 0;
     private int verbose = 1;
@@ -124,52 +134,26 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private SimpleGauge latencyGauge;
     private transient Counter deleteCounter;
 
+    protected final RowDataSerializer rowDataSerializer;
+
     public AdbpgOutputFormat(
-            String url,
-            String tablename,
-            String username,
-            String password,
             int fieldNum,
             String[] fieldNamesStr,
             String[] keyFields,
             LogicalType[] lts,
-            int retryWaitTime,
-            int batchSize,
-            int batchWriteTimeoutMs,
-            int maxRetryTime,
-            int connectionMaxActive,
-            String conflictMode,
-            int useCopy,
-            String targetSchema,
-            String exceptionMode,
-            int reserveMS,
-            int caseSensitive,
-            int writeMode,
-            int verbose
+            ReadableConfig config
     ) {
-        this.url = url;
-        this.tableName = tablename;
-        this.userName = username;
-        this.password = password;
+        this.config = config;
+        this.url = config.get(URL);
+        this.tableName = config.get(TABLE_NAME);
+        this.userName = config.get(USERNAME);
+        this.password = config.get(PASSWORD);
         this.fieldNum = fieldNum;
-
+        this.lts = lts;
+        this.rowDataSerializer = new RowDataSerializer(this.lts);
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
         this.fieldNamesStr = fieldNamesStr;
         this.fieldNames = joinerOnComma.join(fieldNamesStr);
-        this.lts = lts;
-        this.retryWaitTime = retryWaitTime;
-        this.batchSize = batchSize;
-        this.batchWriteTimeout = batchWriteTimeoutMs;
-        this.maxRetryTime = maxRetryTime;
-        this.connectionMaxActive = connectionMaxActive;
-        this.conflictMode = conflictMode;
-        this.useCopy = useCopy;
-        this.targetSchema = targetSchema;
-        this.exceptionMode = exceptionMode;
-        this.reserveMs = (reserveMS != 0);
-        this.caseSensitive = (caseSensitive != 0);
-        this.writeMode = writeMode;
-        this.verbose = verbose;
 
         if (keyFields != null) {
             for (int i = 0; i < keyFields.length; i++) {
@@ -195,6 +179,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         if (null == o) {
             return "null";
         }
+
         String str = o.toString();
         if (str.indexOf("'") >= 0) {
             str = str.replaceAll("'", "''");
@@ -218,24 +203,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     }
 
     @Override
-    public void open(int a, int b) throws IOException {
-        dataSource = new DruidDataSource();
-        dataSource.setUrl(url);
-        dataSource.setUsername(userName);
-        dataSource.setPassword(password);
-        dataSource.setDriverClassName(driverClassName);
-        dataSource.setMaxActive(connectionMaxActive);
-        dataSource.setInitialSize(connectionInitialSize);
-        dataSource.setMaxWait(maxWait);
-        dataSource.setMinIdle(connectionMinIdle);
-        dataSource.setTimeBetweenEvictionRunsMillis(2000);
-        dataSource.setMinEvictableIdleTimeMillis(600000);
-        dataSource.setMaxEvictableIdleTimeMillis(900000);
-        dataSource.setValidationQuery("select 1");
-        dataSource.setTestOnBorrow(false);
-        dataSource.setTestWhileIdle(connectionTestWhileIdle);
-        dataSource.setRemoveAbandoned(true);
-        dataSource.setRemoveAbandonedTimeout(removeAbandonedTimeout);
+    public void open(int taskNumber, int numTasks) throws IOException {
+        dataSource = AdbpgOptions.buildDataSourceFromOptions(config);
         try {
             dataSource.init();
         } catch (SQLException e) {
@@ -297,29 +266,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         latencyGauge = MetricUtils.registerCurrentSendTime(getRuntimeContext());
         sinkSkipCounter = MetricUtils.registerNumRecordsOutErrors(getRuntimeContext());
         deleteCounter = MetricUtils.registerSinkDeleteCounter(getRuntimeContext());
-
-        LOG.info("sink connector created using url=" + url + ", "
-                + "tableName=" + tableName + ", "
-                + "userName=" + userName + ", "
-                + "password=" + password + ", "
-                + "maxRetries=" + maxRetryTime + ", "
-                + "retryWaitTime=" + retryWaitTime + ", "
-                + "batchSize=" + batchSize + ", "
-                + "connectionMaxActive=" + connectionMaxActive + ", "
-                + "batchWriteTimeoutMs=" + batchWriteTimeout + ", "
-                + "conflictMode=" + conflictMode + ", "
-                + "timeZone=" + timeZone + ", "
-                + "useCopy=" + useCopy + ", "
-                + "targetSchema=" + targetSchema + ", "
-                + "exceptionMode=" + exceptionMode + ", "
-                + "reserveMs=" + reserveMs + ", "
-                + "caseSensitive=" + caseSensitive + ", "
-                + "writeMode=" + writeMode + ", "
-                + "fieldNum=" + fieldNum + ", "
-                + "fieldNamesStr=" + Arrays.asList(fieldNamesStr).toString() + ", "
-                + "keyFields=" + pkFields.toString() + ", "
-                + "verbose=" + verbose + ", "
-                + "lts=" + Arrays.asList(lts).toString());
     }
 
     @Override
@@ -327,18 +273,18 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         if (null == record) {
             return;
         }
-        RowData rowData = copyRowData(record);
+        RowData rowData = rowDataSerializer.copy(record);
         inputCount++;
         if (existsPrimaryKeys) {
             synchronized (mapBuffer) {
                 // Construct primary key string as map key
                 String dupKey = constructDupKey(rowData, pkIndex);
-                mapBuffer.put(dupKey, new Tuple2<>(true, rowData));
+                mapBuffer.put(dupKey, rowData);
             }
         } else {
             synchronized (mapBufferWithoutPk) {
                 // Add row to list when primary key does not exist
-                mapBufferWithoutPk.add(new Tuple2<>(true, rowData));
+                mapBufferWithoutPk.add(rowData);
             }
         }
 
@@ -444,16 +390,29 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         synchronized (existsPrimaryKeys ? mapBuffer : mapBufferWithoutPk) {
             List<RowData> addBuffer = new ArrayList<>();
             List<RowData> deleteBuffer = new ArrayList<>();
-            Collection<Tuple2<Boolean, RowData>> buffer = existsPrimaryKeys ? mapBuffer.values() : mapBufferWithoutPk;
+            Collection<RowData> buffer = existsPrimaryKeys ? mapBuffer.values() : mapBufferWithoutPk;
             if (buffer.size() > 0) {
-                for (Tuple2<Boolean, RowData> rowTuple2 : buffer) {
-                    if (rowTuple2.f0) {
-                        addBuffer.add(rowTuple2.f1);
-                    } else {
-                        deleteBuffer.add(rowTuple2.f1);
+                for (RowData row : buffer) {
+                    switch (row.getRowKind()) {
+                        case INSERT:
+                        case UPDATE_AFTER:
+                            addBuffer.add(row);
+                            break;
+                        case DELETE:
+                        case UPDATE_BEFORE:
+                            deleteBuffer.add(row);
+                            break;
+                        default:
+                            throw new RuntimeException(
+                                    "Not supported row kind " + row.getRowKind());
                     }
                 }
                 batchWrite(addBuffer);
+                if (existsPrimaryKeys) {
+                    batchDelete(deleteBuffer);
+                } else {
+                    batchDeleteWithoutPk(deleteBuffer);
+                }
             }
             if (1 == verbose) {
                 LOG.info("finished syncing " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
@@ -472,6 +431,59 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         }
         if (outTps != null) {
             outTps.markEvent(rows.size());
+        }
+    }
+
+    private void batchDeleteWithoutPk(List<RowData> buffers) {
+        for (RowData row : buffers) {
+            Joiner joinerOnComma = Joiner.on(" AND ").useForNull("null");
+            String[] fields = writeFormat(lts, row, timeZone, reserveMs);
+            List<String> sub = new ArrayList<>();
+            for (int i = 0; i < row.getArity(); i++) {
+                if (caseSensitive) {
+                    if (row.isNullAt(i)) {
+                        sub.add(" \"" + fieldNamesStr[i] + "\" is null ");
+                    } else {
+                        sub.add(" \"" + fieldNamesStr[i] + "\" = " + fields[i]);
+                    }
+                } else {
+                    if (row.isNullAt(i)) {
+                        sub.add(" " + fieldNamesStr[i] + " is null ");
+                    } else {
+                        sub.add(" " + fieldNamesStr[i] + " = " + fields[i]);
+                    }
+                }
+            }
+            String sql = null;
+            if (caseSensitive) {
+                sql = String.format(DELETE_WITH_KEY_SQL_TPL, "\"" + targetSchema + "\".\"" + tableName + "\"", joinerOnComma.join(sub));
+            } else {
+                sql = String.format(DELETE_WITH_KEY_SQL_TPL, targetSchema + "." + tableName, joinerOnComma.join(sub));
+            }
+            try {
+                executeSql(sql);
+            } catch (SQLException e) {
+                LOG.warn("Exception in delete sql: " + sql, e);
+            }
+        }
+    }
+
+    private void batchDelete(List<RowData> buffers) {
+        for (RowData row : buffers) {
+            StringBuilder sb = new StringBuilder();
+            if (caseSensitive) {
+                sb.append("DELETE FROM ").append("\"").append(targetSchema).append("\".\"").append(tableName).append("\" where ");
+            } else {
+                sb.append("DELETE FROM ").append(targetSchema).append(".").append(tableName).append(" where ");
+            }
+            Object[] output = deleteFormat(lts, row, new HashSet<>(primaryKeys), timeZone, reserveMs, true);
+            sb.append(org.apache.commons.lang3.StringUtils.join(output, " and "));
+            String sql = sb.toString();
+            try {
+                executeSql(sql);
+            } catch (SQLException e) {
+                LOG.warn("Exception in delete sql: " + sql, e);
+            }
         }
     }
 
@@ -504,20 +516,20 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 StringBuilder sb = new StringBuilder();
                 if (caseSensitive) {
                     sb.append(insertClause).append("\"").append(targetSchema).append("\"").append(".").append("\"")
-                                    .append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
+                            .append(tableName).append("\"").append(" (" + fieldNamesCaseSensitive + " ) values ");
                 } else {
                     sb.append(insertClause).append(targetSchema).append(".").append(tableName)
-                                    .append(" (" + fieldNames + " ) values ");
+                            .append(" (" + fieldNames + " ) values ");
                 }
 
                 sb.append(StringUtils.join(valueList, ","));
                 if (caseSensitive) {
                     sb.append(" on conflict(").append(primaryFieldNamesCaseSensitive).append(") ")
-                                    .append(" do update set (").append(nonPrimaryFieldNamesCaseSensitive)
-                                    .append(")=(").append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
+                            .append(" do update set (").append(nonPrimaryFieldNamesCaseSensitive)
+                            .append(")=(").append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
                 } else {
                     sb.append(" on conflict(").append(primaryFieldNames).append(") ").append(" do update set (")
-                                    .append(nonPrimaryFieldNames).append(")=(").append(excludedNonPrimaryFieldNames)
+                            .append(nonPrimaryFieldNames).append(")=(").append(excludedNonPrimaryFieldNames)
                             .append(")");
                 }
                 executeSql(sb.toString());
@@ -547,10 +559,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             // Batch upsert demotes to single upsert when conflictMode='upsert' or writeMode=2
             if (existsPrimaryKeys
                     && (writeMode == 2 || (
-                            e.getMessage() != null
-                                    && e.getMessage().indexOf("duplicate key") != -1
-                                    && e.getMessage().indexOf("violates unique constraint") != -1
-                                    && "upsert".equalsIgnoreCase(conflictMode)))) {
+                    e.getMessage() != null
+                            && e.getMessage().indexOf("duplicate key") != -1
+                            && e.getMessage().indexOf("violates unique constraint") != -1
+                            && "upsert".equalsIgnoreCase(conflictMode)))) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert msgs one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -720,10 +732,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         StringBuilder sql = new StringBuilder();
         if (caseSensitive) {
             sql.append("UPDATE \"").append(targetSchema).append("\".\"").append(tableName).append("\" SET ")
-                            .append(setStatement).append(" WHERE ").append(whereStatement);
+                    .append(setStatement).append(" WHERE ").append(whereStatement);
         } else {
             sql.append("UPDATE ").append(targetSchema).append(".").append(tableName).append(" SET ")
-                            .append(setStatement).append(" WHERE ").append(whereStatement);
+                    .append(setStatement).append(" WHERE ").append(whereStatement);
         }
         try {
             executeSql(sql.toString());
@@ -742,11 +754,11 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         if (caseSensitive) {
             sb.append(" on conflict(").append(primaryFieldNamesCaseSensitive).append(") ").append(" do update set (")
                     .append(nonPrimaryFieldNamesCaseSensitive).append(")=(")
-                            .append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
+                    .append(excludedNonPrimaryFieldNamesCaseSensitive).append(")");
         } else {
             sb.append(" on conflict(").append(primaryFieldNames).append(") ")
                     .append(" do update set (").append(nonPrimaryFieldNames).append(")=(")
-                            .append(excludedNonPrimaryFieldNames).append(")");
+                    .append(excludedNonPrimaryFieldNames).append(")");
         }
         try {
             executeSql(sb.toString());
