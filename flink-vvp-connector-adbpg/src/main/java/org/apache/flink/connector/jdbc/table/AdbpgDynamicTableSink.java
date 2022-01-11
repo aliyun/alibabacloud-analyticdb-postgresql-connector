@@ -1,6 +1,8 @@
 package org.apache.flink.connector.jdbc.table;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.OutputFormatProvider;
@@ -10,6 +12,24 @@ import org.apache.flink.types.RowKind;
 import java.util.Arrays;
 import java.util.Objects;
 
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONFLICT_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTION_MAX_ACTIVE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RESERVEMS;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USE_COPY;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.VERBOSE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MODE;
+
 /**
  * ADBPG Sink Implementation.
  * create AdbpgOutputFormat for detail implementation
@@ -17,71 +37,32 @@ import java.util.Objects;
 @Internal
 public class AdbpgDynamicTableSink implements DynamicTableSink {
 
-    private final String url;
-    private final String tablename;
-    private final String username;
-    private final String password;
+    private final ReadableConfig config;
+    private  TableSchema tableSchema;
     private int fieldNum;
     private String[] fieldNamesStr;
     private String[] keyFields;
     private LogicalType[] lts;
-    private int retryWaitTime;
-    private int batchSize;
-    private int batchWriteTimeoutMs;
-    private int maxRetryTime;
-    private int connectionMaxActive;
-    private String conflictMode;
-    private int useCopy;
-    private String targetSchema;
-    private String exceptionMode;
-    private int reserveMS;
-    private int caseSensitive;
-    private int writeMode;
-    private int verbose;
 
     public AdbpgDynamicTableSink(
-            String url,
-            String tablename,
-            String username,
-            String password,
-            int fieldNum,
-            String[] fieldNamesStr,
-            String[] keyFields,
-            LogicalType[] lts,
-            int retryWaitTime,
-            int batchSize,
-            int batchWriteTimeoutMs,
-            int maxRetryTime,
-            int connectionMaxActive,
-            String conflictMode,
-            int useCopy,
-            String targetSchema,
-            String exceptionMode,
-            int reserveMS,
-            int caseSensitive,
-            int writeMode,
-            int verbose) {
-        this.url = url;
-        this.tablename = tablename;
-        this.username = username;
-        this.password = password;
-        this.fieldNamesStr = fieldNamesStr;
-        this.fieldNum = fieldNum;
-        this.lts = lts;
-        this.keyFields = keyFields;
-        this.retryWaitTime = retryWaitTime;
-        this.batchSize = batchSize;
-        this.batchWriteTimeoutMs = batchWriteTimeoutMs;
-        this.maxRetryTime = maxRetryTime;
-        this.connectionMaxActive = connectionMaxActive;
-        this.conflictMode = conflictMode;
-        this.useCopy = useCopy;
-        this.targetSchema = targetSchema;
-        this.exceptionMode = exceptionMode;
-        this.reserveMS = reserveMS;
-        this.caseSensitive = caseSensitive;
-        this.writeMode = writeMode;
-        this.verbose = verbose;
+            ReadableConfig config,
+            TableSchema tableSchema
+    ) {
+        this.config = config;
+        this.tableSchema = tableSchema;
+        this.fieldNum = tableSchema.getFieldCount();
+        this.fieldNamesStr = new String[fieldNum];
+        for (int i = 0; i < fieldNum; i++) {
+            this.fieldNamesStr[i] = tableSchema.getFieldName(i).get();
+        }
+        this.keyFields =
+                tableSchema.getPrimaryKey()
+                        .map(pk -> pk.getColumns().toArray(new String[0]))
+                        .orElse(null);
+        this.lts = new LogicalType[fieldNum];
+        for (int i = 0; i < fieldNum; i++) {
+            this.lts[i] = tableSchema.getFieldDataType(i).get().getLogicalType();
+        }
     }
 
     @Override
@@ -96,53 +77,13 @@ public class AdbpgDynamicTableSink implements DynamicTableSink {
     @Override
     @SuppressWarnings("unchecked")
     public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
-        final AdbpgOutputFormat aof = new AdbpgOutputFormat(url,
-                tablename,
-                username,
-                password,
-                fieldNum,
-                fieldNamesStr,
-                keyFields,
-                lts,
-                retryWaitTime,
-                batchSize,
-                batchWriteTimeoutMs,
-                maxRetryTime,
-                connectionMaxActive,
-                conflictMode,
-                useCopy,
-                targetSchema,
-                exceptionMode,
-                reserveMS,
-                caseSensitive,
-                writeMode,
-                verbose);
+        final AdbpgOutputFormat aof = new AdbpgOutputFormat(fieldNum, fieldNamesStr, keyFields, lts, config);
         return OutputFormatProvider.of(aof);
     }
 
     @Override
     public DynamicTableSink copy() {
-        return new AdbpgDynamicTableSink(url,
-                tablename,
-                username,
-                password,
-                fieldNum,
-                fieldNamesStr,
-                keyFields,
-                lts,
-                retryWaitTime,
-                batchSize,
-                batchWriteTimeoutMs,
-                maxRetryTime,
-                connectionMaxActive,
-                conflictMode,
-                useCopy,
-                targetSchema,
-                exceptionMode,
-                reserveMS,
-                caseSensitive,
-                writeMode,
-                verbose);
+        return new AdbpgDynamicTableSink(config, tableSchema);
     }
 
     @Override
@@ -159,51 +100,33 @@ public class AdbpgDynamicTableSink implements DynamicTableSink {
             return false;
         }
         AdbpgDynamicTableSink that = (AdbpgDynamicTableSink) o;
-        return Objects.equals(url, that.url)
-                && Objects.equals(tablename, that.tablename)
-                && Objects.equals(username, that.username)
-                && Objects.equals(password, that.password)
+        return Objects.equals(this.config.get(URL),  that.config.get(URL))
+                && Objects.equals(this.config.get(TABLE_NAME), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(USERNAME), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(PASSWORD), that.config.get(TABLE_NAME))
                 && Objects.equals(fieldNum, that.fieldNum)
                 && Arrays.equals(fieldNamesStr, that.fieldNamesStr)
                 && Arrays.equals(keyFields, that.keyFields)
                 && Arrays.equals(lts, that.lts)
-                && Objects.equals(retryWaitTime, that.retryWaitTime)
-                && Objects.equals(batchSize, that.batchSize)
-                && Objects.equals(batchWriteTimeoutMs, that.batchWriteTimeoutMs)
-                && Objects.equals(maxRetryTime, that.maxRetryTime)
-                && Objects.equals(connectionMaxActive, that.connectionMaxActive)
-                && Objects.equals(conflictMode, that.conflictMode)
-                && Objects.equals(useCopy, that.useCopy)
-                && Objects.equals(targetSchema, that.targetSchema)
-                && Objects.equals(exceptionMode, that.exceptionMode)
-                && Objects.equals(reserveMS, that.reserveMS)
-                && Objects.equals(caseSensitive, that.caseSensitive)
-                && Objects.equals(writeMode, that.writeMode)
-                && Objects.equals(verbose, that.verbose);
+                && Objects.equals(this.config.get(RETRY_WAIT_TIME), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(BATCH_SIZE), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(BATCH_WRITE_TIMEOUT_MS), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(MAX_RETRY_TIMES), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(CONNECTION_MAX_ACTIVE), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(CONFLICT_MODE), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(USE_COPY), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(TARGET_SCHEMA), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(EXCEPTION_MODE), that.config.get(EXCEPTION_MODE))
+                && Objects.equals(this.config.get(RESERVEMS), that.config.get(RESERVEMS))
+                && Objects.equals(this.config.get(CASE_SENSITIVE), that.config.get(CASE_SENSITIVE))
+                && Objects.equals(this.config.get(WRITE_MODE), that.config.get(WRITE_MODE))
+                && Objects.equals(this.config.get(VERBOSE), that.config.get(VERBOSE));
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(url,
-                tablename,
-                username,
-                password,
-                fieldNum,
-                fieldNamesStr,
-                keyFields,
-                lts,
-                retryWaitTime,
-                batchSize,
-                batchWriteTimeoutMs,
-                maxRetryTime,
-                connectionMaxActive,
-                conflictMode,
-                useCopy,
-                targetSchema,
-                exceptionMode,
-                reserveMS,
-                caseSensitive,
-                writeMode,
-                verbose);
+        return Objects.hash(
+                config,
+                tableSchema);
     }
 }
