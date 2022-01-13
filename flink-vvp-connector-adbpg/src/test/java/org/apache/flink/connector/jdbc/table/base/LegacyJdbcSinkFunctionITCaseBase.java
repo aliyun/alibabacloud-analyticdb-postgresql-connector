@@ -54,6 +54,8 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
 
     private final Map<String, String> keyedSinkOptions;
 
+    private final Map<String, String> keyedCaseSensitveSinkOptions;
+
     private final Map<String, String> nonKeyedSinkOptions;
 
     public LegacyJdbcSinkFunctionITCaseBase(
@@ -66,6 +68,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
         this.sinkTableName = sinkTableName;
         this.keyedSinkOptions = sinkOptions;
         this.nonKeyedSinkOptions = sinkOptions;
+        this.keyedCaseSensitveSinkOptions = sinkOptions;
     }
 
     public LegacyJdbcSinkFunctionITCaseBase(
@@ -73,11 +76,13 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
             boolean mockNullFieldValues,
             String sinkTableName,
             Map<String, String> keyedSinkOptions,
+            Map<String, String> keyedCaseSensitveSinkOptions,
             Map<String, String> nonKeyedSinkOptions) {
         this.fieldTypes = fieldTypes;
         this.mockNullFieldValues = mockNullFieldValues;
         this.sinkTableName = sinkTableName;
         this.keyedSinkOptions = keyedSinkOptions;
+        this.keyedCaseSensitveSinkOptions = keyedCaseSensitveSinkOptions;
         this.nonKeyedSinkOptions = nonKeyedSinkOptions;
     }
 
@@ -208,6 +213,56 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
                         sinkTableName,
                         createFieldLists(fieldTypes),
                         createOptions(nonKeyedSinkOptions));
+        bsTableEnv.executeSql(sinkTableSql).print();
+
+        bsTableEnv
+                .executeSql(String.format("insert into %s select * from source", sinkTableName))
+                .print();
+
+        List<Row> data = new ArrayList<>();
+        bsTableEnv.sqlQuery("select * from source").execute().collect().forEachRemaining(data::add);
+        compareResult(data, querySinkTableResult(), false);
+    }
+
+    @Test
+    public void testKeyedCaseSensitive() throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        env.getConfig().enableObjectReuse();
+        env.setRestartStrategy(new RestartStrategies.NoRestartStrategyConfiguration());
+
+        EnvironmentSettings bsSettings =
+                EnvironmentSettings.newInstance().useBlinkPlanner().inStreamingMode().build();
+        StreamTableEnvironment bsTableEnv = StreamTableEnvironment.create(env, bsSettings);
+
+        Map<String, String> sourceOptions = createSourceOptionsForNonKeyed();
+
+        String sourceTableSql =
+                String.format(
+                        "CREATE TABLE source ("
+                                + " id INT, "
+                                + " _value INT, "
+                                + " %s,"
+                                + " primary key(id) not enforced"
+                                + ") WITH ("
+                                + "%s"
+                                + ")",
+                        createFieldLists(fieldTypes), createOptions(sourceOptions));
+        bsTableEnv.executeSql(sourceTableSql).print();
+
+        String sinkTableSql =
+                String.format(
+                        "CREATE TABLE %s ("
+                                + " id INT, "
+                                + " _value INT, "
+                                + " %s,"
+                                + " primary key(id) not enforced"
+                                + ") WITH ("
+                                + "%s"
+                                + ")",
+                        sinkTableName,
+                        createFieldLists(fieldTypes),
+                        createOptions(keyedCaseSensitveSinkOptions));
         bsTableEnv.executeSql(sinkTableSql).print();
 
         bsTableEnv

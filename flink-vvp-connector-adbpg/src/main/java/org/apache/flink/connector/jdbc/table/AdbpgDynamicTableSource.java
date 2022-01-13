@@ -1,5 +1,6 @@
 package org.apache.flink.connector.jdbc.table;
 
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.TableFunctionProvider;
@@ -15,50 +16,16 @@ import java.util.List;
  * create AdbpgRowDataLookupFunction for detail implementation
  */
 public class AdbpgDynamicTableSource implements LookupTableSource {
-    private final String url;
-    private final String tablename;
-    private final String username;
-    private final String password;
     private int fieldNum;
     private String[] fieldNamesStr;
     private LogicalType[] lts;
-    private int retryWaitTime;
-    private int batchWriteTimeoutMs;
-    private int maxRetryTime;
-    private int connectionMaxActive;
-    private String exceptionMode;
-    private String targetSchema;
-    private int caseSensitive;
-    private int joinMaxRows;
-    private String cache;
-    private int cacheSize;
-    private int cacheTTLMs;
-    private int verbose;
+    private ReadableConfig config;
 
-    public AdbpgDynamicTableSource(String url, String tablename, String username, String password, int fieldNum,
-                                   String[] fieldNamesStr, LogicalType[] lts, int retryWaitTime, int batchWriteTimeoutMs,
-                                   int maxRetryTime, int connectionMaxActive, String exceptionMode, String targetSchema,
-                                   int caseSensitive, int joinMaxRows, String cache, int cacheSize, int cacheTTLMs,
-                                   int verbose) {
-        this.url = url;
-        this.tablename = tablename;
-        this.username = username;
-        this.password = password;
+    public AdbpgDynamicTableSource(int fieldNum, String[] fieldNamesStr, LogicalType[] lts, ReadableConfig config) {
         this.fieldNum = fieldNum;
         this.fieldNamesStr = fieldNamesStr;
         this.lts = lts;
-        this.retryWaitTime = retryWaitTime;
-        this.batchWriteTimeoutMs = batchWriteTimeoutMs;
-        this.maxRetryTime = maxRetryTime;
-        this.connectionMaxActive = connectionMaxActive;
-        this.targetSchema = targetSchema;
-        this.caseSensitive = caseSensitive;
-        this.exceptionMode = exceptionMode;
-        this.joinMaxRows = joinMaxRows;
-        this.cache = cache;
-        this.cacheSize = cacheSize;
-        this.cacheTTLMs = cacheTTLMs;
-        this.verbose = verbose;
+        this.config = config;
     }
 
     @Override
@@ -84,50 +51,18 @@ public class AdbpgDynamicTableSource implements LookupTableSource {
                         .toArray(LogicalType[]::new);
 
         return TableFunctionProvider.of(
-                new AdbpgRowDataLookupFunction(url,
-                        tablename,
-                        username,
-                        password,
+                new AdbpgRowDataLookupFunction(
                         fieldNum,
                         fieldNamesStr,
                         lts,
-                        retryWaitTime,
-                        batchWriteTimeoutMs,
-                        maxRetryTime,
-                        connectionMaxActive,
-                        exceptionMode,
-                        targetSchema,
-                        caseSensitive,
-                        joinMaxRows,
-                        cache,
-                        cacheSize,
-                        cacheTTLMs,
                         keyNames,
                         keyTypes,
-                        verbose));
+                        config));
     }
 
     @Override
     public DynamicTableSource copy() {
-        return new AdbpgDynamicTableSource(url,
-                tablename,
-                username,
-                password,
-                fieldNum,
-                fieldNamesStr,
-                lts,
-                retryWaitTime,
-                batchWriteTimeoutMs,
-                maxRetryTime,
-                connectionMaxActive,
-                exceptionMode,
-                targetSchema,
-                caseSensitive,
-                joinMaxRows,
-                cache,
-                cacheSize,
-                cacheTTLMs,
-                verbose);
+        return new AdbpgDynamicTableSource(fieldNum, fieldNamesStr, lts, config);
     }
 
     @Override

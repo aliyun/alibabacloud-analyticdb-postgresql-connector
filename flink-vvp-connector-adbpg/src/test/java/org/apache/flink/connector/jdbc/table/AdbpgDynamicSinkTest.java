@@ -23,6 +23,7 @@ import org.apache.flink.connector.jdbc.table.base.LegacyJdbcSinkFunctionITCaseBa
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.flink.connector.jdbc.table.util.AdbpgTestConfParser;
 import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
+import org.apache.flink.connector.jdbc.table.utils.StringUtils;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -40,7 +41,7 @@ import java.util.HashMap;
 public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
 
     private static final String TEST_TABLE_NAME =
-            "dynamic_sink_" + RandomStringUtils.randomAlphabetic(16);
+            "dynamic_sink_" + RandomStringUtils.randomAlphabetic(16).toLowerCase();
 
     private Statement statement;
 
@@ -64,6 +65,22 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                         this.put(AdbpgOptions.WRITE_MODE.key(), "0");
                     }
                 },
+                new HashMap<String, String>() {
+                    {
+                        this.put("connector", "adbpg-nightly");
+                        this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
+                        this.put(
+                                AdbpgOptions.USERNAME.key(),
+                                AdbpgTestConfParser.INSTANCE.getUsername());
+                        this.put(
+                                AdbpgOptions.PASSWORD.key(),
+                                AdbpgTestConfParser.INSTANCE.getPassword());
+                        this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
+                        this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
+                        this.put(AdbpgOptions.CASE_SENSITIVE.key(), "1");
+                    }
+                    }
+                ,
                 new HashMap<String, String>() {
                     {
                         this.put("connector", "adbpg-nightly");

@@ -112,6 +112,7 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         optionalOptions.add(CACHE);
         optionalOptions.add(CACHESIZE);
         optionalOptions.add(CACHETTLMS);
+        optionalOptions.add(VERBOSE);
         return optionalOptions;
     }
 
@@ -123,23 +124,6 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         final ReadableConfig config = helper.getOptions();
 
         LOG.info("Try to get and validate configuration.");
-        String url = config.get(URL);
-        String tablename = config.get(TABLE_NAME);
-        String username = config.get(USERNAME);
-        String password = config.get(PASSWORD);
-        int retryWaitTime = config.getOptional(RETRY_WAIT_TIME).orElse(100);
-        int batchWriteTimeoutMs = config.getOptional(BATCH_WRITE_TIMEOUT_MS).orElse(5000);
-        int maxRetryTime = config.getOptional(MAX_RETRY_TIMES).orElse(3);
-        int connectionMaxActive = config.getOptional(CONNECTION_MAX_ACTIVE).orElse(5);
-        int verbose = config.getOptional(VERBOSE).orElse(0);
-        String exceptionMode = config.getOptional(EXCEPTION_MODE).orElse("ignore");
-        String targetSchema = config.getOptional(TARGET_SCHEMA).orElse("public");
-        int caseSensitive = config.getOptional(CASE_SENSITIVE).orElse(0);
-        int joinMaxRows = config.getOptional(JOINMAXROWS).orElse(1024);
-        String cache = config.getOptional(CACHE).orElse("none");
-        int cacheSize = config.getOptional(CACHESIZE).orElse(10000);
-        int cacheTTLMs = config.getOptional(CACHETTLMS).orElse(2000000000);
-
         TableSchema tableSchema =
                 TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
         int fieldNum = tableSchema.getFieldCount();
@@ -154,25 +138,7 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
 
         validateSource(config, tableSchema);
         LOG.info("Validation passed, adbpg source created successfully.");
-        return new AdbpgDynamicTableSource(url,
-                tablename,
-                username,
-                password,
-                fieldNum,
-                fieldNamesStr,
-                lts,
-                retryWaitTime,
-                batchWriteTimeoutMs,
-                maxRetryTime,
-                connectionMaxActive,
-                exceptionMode,
-                targetSchema,
-                caseSensitive,
-                joinMaxRows,
-                cache,
-                cacheSize,
-                cacheTTLMs,
-                verbose);
+        return new AdbpgDynamicTableSource(fieldNum, fieldNamesStr, lts, config);
     }
 
 

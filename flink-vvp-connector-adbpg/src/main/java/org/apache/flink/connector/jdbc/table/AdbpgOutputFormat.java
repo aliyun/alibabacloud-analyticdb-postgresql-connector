@@ -59,10 +59,21 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONFLICT_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RESERVEMS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USE_COPY;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.VERBOSE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MODE;
 
 /**
  * ADBPG sink Implementation.
@@ -93,10 +104,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private String excludedNonPrimaryFieldNames = null;
     private String excludedNonPrimaryFieldNamesCaseSensitive = null;
     // write policy
-    private int maxRetryTime = 3;
-    private int retryWaitTime = 100;
-    private int batchSize = 500;
-    private long batchWriteTimeout = 5000;
+    private int maxRetryTime ;
+    private int retryWaitTime ;
+    private int batchSize ;
+    private long batchWriteTimeout ;
     private long lastWriteTime = 0;
     // Use HashMap mapBuffer for data with primary key to preserve order
     private Map<String, RowData> mapBuffer = new HashMap<>();
@@ -104,28 +115,22 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
     private List<RowData> mapBufferWithoutPk = new ArrayList<>();
     private String insertClause = "INSERT INTO ";
     private String timeZone = "Asia/Shanghai";
+    private final String DELETE_WITH_KEY_SQL_TPL = "DELETE FROM %s WHERE %s ";
     private long inputCount = 0;
     // datasource
-    private String driverClassName = "org.postgresql.Driver";
-    private int connectionMaxActive = 5;
-    private int connectionInitialSize = 1;
-    private int connectionMinIdle = 1;
-    private int maxWait = 60000;
-    private int removeAbandonedTimeout = 3 * 60;
-    private boolean connectionTestWhileIdle = true;
     private transient DruidDataSource dataSource = null;
     private transient ScheduledExecutorService executorService;
     private transient Connection connection;
     private transient Statement statement;
-    private boolean reserveMs = false;
-    private String conflictMode = "ignore";
-    private int useCopy = 0;
-    private String targetSchema = "public";
-    private String exceptionMode = "ignore";
-    private final String DELETE_WITH_KEY_SQL_TPL = "DELETE FROM %s WHERE %s ";
-    private boolean caseSensitive = false;
-    private int writeMode = 0;
-    private int verbose = 1;
+    // connector parameter
+    private boolean reserveMs ;
+    private String conflictMode ;
+    private int useCopy ;
+    private String targetSchema ;
+    private String exceptionMode ;
+    private boolean caseSensitive ;
+    private int writeMode ;
+    private int verbose ;
 
     //metric
     private Meter outTps;
@@ -148,6 +153,17 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
         this.tableName = config.get(TABLE_NAME);
         this.userName = config.get(USERNAME);
         this.password = config.get(PASSWORD);
+        this.batchWriteTimeout = config.get(BATCH_WRITE_TIMEOUT_MS);
+        this.reserveMs = AdbpgOptions.isConfigOptionTrue(config,RESERVEMS);
+        this.conflictMode = config.get(CONFLICT_MODE);
+        this.useCopy = config.get(USE_COPY);
+        this.maxRetryTime = config.get(MAX_RETRY_TIMES);
+        this.batchSize = config.get(BATCH_SIZE);
+        this.targetSchema = config.get(TARGET_SCHEMA);
+        this.exceptionMode = config.get(EXCEPTION_MODE);
+        this.caseSensitive = AdbpgOptions.isConfigOptionTrue(config,CASE_SENSITIVE);
+        this.writeMode = config.get(WRITE_MODE);
+        this.verbose = config.get(VERBOSE);
         this.fieldNum = fieldNum;
         this.lts = lts;
         this.rowDataSerializer = new RowDataSerializer(this.lts);
@@ -225,10 +241,12 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             String[] nonPrimaryFieldNamesStrCaseSensitive = new String[fieldNum - primaryKeys.size()];
             String[] excludedNonPrimaryFieldNamesStr = new String[fieldNum - primaryKeys.size()];
             String[] excludedNonPrimaryFieldNamesStrCaseSensitive = new String[fieldNum - primaryKeys.size()];
+            String[] fieldNamesStrCaseSensitive = new String[this.fieldNum];
             int primaryIndex = 0;
             int excludedIndex = 0;
             for (int i = 0; i < fieldNum; i++) {
                 String fileName = fieldNamesStr[i];
+                fieldNamesStrCaseSensitive[i] = "\"" + fileName + "\"";
                 if (primaryKeys.contains(fileName)) {
                     primaryFieldNamesStr[primaryIndex] = fileName;
                     primaryFieldNamesStrCaseSensitive[primaryIndex++] = "\"" + fileName + "\"";
@@ -245,6 +263,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
             this.nonPrimaryFieldNamesCaseSensitive = joinerOnComma.join(nonPrimaryFieldNamesStrCaseSensitive);
             this.excludedNonPrimaryFieldNames = joinerOnComma.join(excludedNonPrimaryFieldNamesStr);
             this.excludedNonPrimaryFieldNamesCaseSensitive = joinerOnComma.join(excludedNonPrimaryFieldNamesStrCaseSensitive);
+            this.fieldNamesCaseSensitive = joinerOnComma.join((Object[]) fieldNamesStrCaseSensitive);
         }
         executorService = new ScheduledThreadPoolExecutor(1,
                 new BasicThreadFactory.Builder().namingPattern("adbpg-flusher-%d").daemon(true).build());
@@ -327,7 +346,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 DecimalData decimalData = row.getDecimal(i, data.getPrecision(), data.getScale());
                 rowData.setField(i, decimalData.copy());
             } else {
-                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
             }
         }
         return rowData;
@@ -366,7 +385,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 DecimalType dt = (DecimalType) t;
                 valuestr = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
             } else {
-                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
             }
             dupKey += valuestr + "#";
         }
@@ -847,7 +866,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 DecimalType dt = (DecimalType) t;
                 output[i] = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
             } else {
-                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
             }
         }
         return output;
@@ -890,7 +909,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 DecimalType dt = (DecimalType) t;
                 output[i] = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
             } else {
-                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
             }
         }
         return output;
@@ -941,7 +960,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> {
                 DecimalType dt = (DecimalType) t;
                 valuestr = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
             } else {
-                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
             }
             if (caseSensitive) {
                 output[keyIndex] = "\"" + colName + "\" = " + valuestr;
