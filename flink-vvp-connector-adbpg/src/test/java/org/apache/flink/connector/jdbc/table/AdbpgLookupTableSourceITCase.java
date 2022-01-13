@@ -81,28 +81,38 @@ public class AdbpgLookupTableSourceITCase extends JdbcLookupTableSourceITCaseBas
         Class.forName(driverClass);
         try (Connection conn = DriverManager.getConnection(url, userName, password);
                 Statement statement = conn.createStatement()) {
-            String[] fieldNames = {"id1", "id2", "comment1", "comment2"};
+            String[] fieldNames = {"id1", "id2","price","comment1", "comment2"};
             statement.executeUpdate(getCreateTableSql(lookupTable));
+            statement.executeUpdate(getCreateTableSql(lookupTableCaseSensitive));
 
             Object[][] data =
                     new Object[][] {
-                        new Object[] {1, "1", "11-c1-v1", "11-c2-v1"},
-                        new Object[] {1, "1", "11-c1-v2", "11-c2-v2"},
-                        new Object[] {2, "3", "23-c1", "23-c2"},
-                        new Object[] {2, "5", "25-c1", "25-c2"},
-                        new Object[] {3, "8", "38-c1", "38-c2"}
+                        new Object[] {1, "1",500.21,"11-c1-v1", "11-c2-v1"},
+                        new Object[] {1, "1",500.22, "11-c1-v2", "11-c2-v2"},
+                        new Object[] {2, "3",500.23, "23-c1", "23-c2"},
+                        new Object[] {2, "5",500.24, "25-c1", "25-c2"},
+                        new Object[] {3, "8",500.25, "38-c1", "38-c2"}
                     };
 
             Statement stat = conn.createStatement();
             stat.execute(
                     String.format(
-                            "insert into %s (id1, id2, comment1, comment2) values "
-                                    + "(1, '1', '11-c1-v1', '11-c2-v1'), "
-                                    + "(1, '1', '11-c1-v2', '11-c2-v2'), "
-                                    + "(2, '3', '23-c1', '23-c2'), "
-                                    + "(2, '5', '25-c1', '25-c2'), "
-                                    + "(3, '8', '38-c1', '38-c2')",
+                            "insert into %s (id1, id2, price, comment1, comment2) values "
+                                    + "(1, '1', 500.21, '11-c1-v1', '11-c2-v1'), "
+                                    + "(1, '1', 500.22, '11-c1-v2', '11-c2-v2'), "
+                                    + "(2, '3', 500.23, '23-c1', '23-c2'), "
+                                    + "(2, '5', 500.24, '25-c1', '25-c2'), "
+                                    + "(3, '8', 500.25, '38-c1', '38-c2')",
                             lookupTable));
+            stat.execute(
+                    String.format(
+                            "insert into %s (id1, id2, price, comment1, comment2) values "
+                                    + "(1, '1', 500.21, '11-c1-v1', '11-c2-v1'), "
+                                    + "(1, '1', 500.22, '11-c1-v2', '11-c2-v2'), "
+                                    + "(2, '3', 500.23, '23-c1', '23-c2'), "
+                                    + "(2, '5', 500.24, '25-c1', '25-c2'), "
+                                    + "(3, '8', 500.25, '38-c1', '38-c2')",
+                            lookupTableCaseSensitive));
             String[] expectRows =
                     Arrays.stream(data)
                             .map(

@@ -1,15 +1,20 @@
 package org.apache.flink.connector.jdbc.table;
 
+import com.alibaba.druid.pool.DruidDataSource;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
 import org.apache.flink.shaded.guava18.com.google.common.base.Joiner;
 import org.apache.flink.shaded.guava18.com.google.common.cache.Cache;
 import org.apache.flink.shaded.guava18.com.google.common.cache.CacheBuilder;
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.table.functions.TableFunction;
+import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.BooleanType;
@@ -27,6 +32,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URL;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Date;
@@ -39,6 +47,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTION_MAX_ACTIVE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.VERBOSE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.JOINMAXROWS;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CACHESIZE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CACHE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CACHETTLMS;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.isConfigOptionTrue;
 
 /**
  * ADBPG AdbpgRowDataLookupFunction Implementation.
@@ -64,6 +90,9 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
     private String cacheStrategy;
     private int cacheSize;
     private int cacheTTLMs;
+    private int usePool = 1;
+    private ReadableConfig config ;
+    private transient DruidDataSource dataSource = null;
 
     // Primary key list and non-primary field names
     private String[] keyNames;
@@ -75,33 +104,31 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
     private String driverClassName = "org.postgresql.Driver";
     private transient Cache<RowData, List<RowData>> cache;
 
-    public AdbpgRowDataLookupFunction(String url, String tablename, String username, String password, int fieldNum,
-                                      String[] fieldNamesStr, LogicalType[] lts, int retryWaitTime,
-                                      int batchWriteTimeoutMs, int maxRetryTime, int connectionMaxActive,
-                                      String exceptionMode, String targetSchema, int caseSensitive, int joinMaxRows,
-                                      String cacheStrategy, int cacheSize, int cacheTTLMs, String[] keyNames,
-                                      LogicalType[] keyTypes, int verbose) {
-        this.url = url;
-        this.tablename = tablename;
-        this.username = username;
-        this.password = password;
+    public AdbpgRowDataLookupFunction(int fieldNum,
+                                      String[] fieldNamesStr, LogicalType[] lts, String[] keyNames,
+                                      LogicalType[] keyTypes, ReadableConfig config) {
+        this.config = config;
+        this.url = config.get(URL);
+        this.tablename = config.get(TABLE_NAME);
+        this.username = config.get(USERNAME);
+        this.password = config.get(PASSWORD);
         this.fieldNum = fieldNum;
         this.fieldNamesStr = fieldNamesStr;
         this.lts = lts;
-        this.retryWaitTime = retryWaitTime;
-        this.batchWriteTimeoutMs = batchWriteTimeoutMs;
-        this.maxRetryTime = maxRetryTime;
-        this.connectionMaxActive = connectionMaxActive;
-        this.exceptionMode = exceptionMode;
-        this.targetSchema = targetSchema;
-        this.caseSensitive = (caseSensitive == 1);
-        this.joinMaxRows = joinMaxRows;
-        this.cacheStrategy = cacheStrategy;
-        this.cacheSize = cacheSize;
-        this.cacheTTLMs = cacheTTLMs;
+        this.retryWaitTime = config.get(RETRY_WAIT_TIME);
+        this.batchWriteTimeoutMs = config.get(BATCH_WRITE_TIMEOUT_MS);
+        this.maxRetryTime = config.get(MAX_RETRY_TIMES);
+        this.connectionMaxActive = config.get(CONNECTION_MAX_ACTIVE);
+        this.exceptionMode = config.get(EXCEPTION_MODE);
+        this.targetSchema = config.get(TARGET_SCHEMA);
+        this.caseSensitive = isConfigOptionTrue(config,CASE_SENSITIVE);
+        this.joinMaxRows = config.get(JOINMAXROWS);
+        this.cacheStrategy = config.get(CACHE);
+        this.cacheSize = config.get(CACHESIZE);
+        this.cacheTTLMs = config.get(CACHETTLMS);
         this.keyNames = keyNames;
         this.keyTypes = keyTypes;
-        this.verbose = verbose;
+        this.verbose = config.get(VERBOSE);;
 
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
         this.escapedFieldNames = joinerOnComma.join(fieldNamesStr);
@@ -184,28 +211,29 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
             cache.cleanUp();
             cache = null;
         }
+        if (this.dataSource != null && !this.dataSource.isClosed()) {
+            this.dataSource.close();
+            this.dataSource = null;
+        }
     }
 
     @Override
     public void open(FunctionContext context) throws Exception {
         this.cache = cacheStrategy.equals("none") ? null : CacheBuilder.newBuilder().expireAfterWrite(cacheTTLMs, TimeUnit.MILLISECONDS).maximumSize(cacheSize).build();
-        LOG.info("source connector created using url=" + url + ", "
-                + "tableName=" + tablename + ", "
-                + "userName=" + username + ", "
-                + "password=" + password + ", "
+        if (1 == this.usePool) {
+            this.dataSource = AdbpgOptions.buildDataSourceFromOptions(config);
+            try {
+                this.dataSource.init();
+            } catch (SQLException e) {
+                LOG.error("Init DataSource Or Get Connection Error!", e);
+                throw new IOException("cannot get connection for url: " + this.url + ", userName: " + this.username
+                        + ", password: " + this.password, e);
+            }
+        }
+        LOG.info("source connector created with "
                 + "filedNum=" + fieldNum + ", "
                 + "fieldNamesStr=" + Arrays.asList(fieldNamesStr).toString() + ", "
                 + "lts=" + Arrays.asList(lts).toString() + ", "
-                + "maxRetries=" + maxRetryTime + ", "
-                + "retryWaitTime=" + retryWaitTime + ", "
-                + "connectionMaxActive=" + connectionMaxActive + ", "
-                + "exceptionMode=" + exceptionMode + ", "
-                + "verbose=" + verbose + ", "
-                + "caseSensitive=" + caseSensitive + ", "
-                + "batchWriteTimeoutMs=" + batchWriteTimeoutMs + ", "
-                + "joinMaxRows=" + joinMaxRows + ", "
-                + "cacheStrategy=" + cacheStrategy + ", "
-                + "targetSchema=" + targetSchema + ", "
                 + "keyNames=" + Arrays.asList(keyNames).toString() + ", "
                 + "keyTypes=" + Arrays.asList(keyTypes) + ", "
                 + "cacheSize=" + cacheSize + ", "
@@ -217,9 +245,21 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
         Exception lastError = null;
         PreparedStatement statement = null;
         Connection connection = null;
-        try {
+        long startTime = System.currentTimeMillis();
+        String connfrom = "";
+        if (1 == this.usePool) {
+            connection = (Connection) this.dataSource.getConnection();
+            connfrom = "from Pool";
+        } else {
             Class.forName(driverClassName).newInstance();
             connection = DriverManager.getConnection(url, username, password);
+            connfrom = "from Driver";
+        }
+        if (1 == this.verbose) {
+            long endTime = System.currentTimeMillis();
+            LOG.info("getConnection " + connfrom + " cost：" + (endTime - startTime) + " ms。");
+        }
+        try {
             statement = connection.prepareStatement(queryTemplate);
             statement.clearParameters();
             for (int i = 0; i < keyNames.length; i++) {
@@ -238,9 +278,13 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
                 rows.add(toResultRow(resultSet));
                 cnt++;
             }
+            if (1 == this.verbose) {
+                long endTime = System.currentTimeMillis();
+                LOG.info("ADBPG rt time is： " + (endTime - startTime) + " ms");
+            }
             return;
         } catch (Exception e) {
-            LOG.warn("Error happens when query Adbpg, try for the {} time.", attemptNum, e);
+            LOG.warn("Error happens when query ADBPG, try for the {} time.", attemptNum, e);
             lastError = e;
         } finally {
             if (statement != null && !statement.isClosed()) {
@@ -293,8 +337,12 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
             statement.setFloat(statindex, rowdata.getFloat(index));
         } else if (t instanceof DoubleType) {
             statement.setDouble(statindex, rowdata.getDouble(index));
+        } else if (t instanceof DecimalType) {
+            final int precision = ((DecimalType) t).getPrecision();
+            final int scale = ((DecimalType) t).getScale();
+            statement.setBigDecimal(statindex, rowdata.getDecimal(index,precision,scale).toBigDecimal());
         } else {
-            throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+            throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
         }
     }
 
@@ -331,8 +379,18 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
             return Float.parseFloat(value.toString());
         } else if (t instanceof DoubleType) {
             return Double.parseDouble(value.toString());
-        } else {
-            throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:huaxi.shx@alibaba-inc.com");
+        }else if (t instanceof DecimalType) {
+            final int precision = ((DecimalType) t).getPrecision();
+            final int scale = ((DecimalType) t).getScale();
+            // using decimal(20, 0) to support db type bigint unsigned, user should define
+            // decimal(20, 0) in SQL,
+            // but other precision like decimal(30, 0) can work too from lenient consideration.
+            return value instanceof BigInteger
+                            ? DecimalData.fromBigDecimal(
+                            new BigDecimal((BigInteger) value, 0), precision, scale)
+                            : DecimalData.fromBigDecimal((BigDecimal) value, precision, scale);
+        }  else {
+            throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
         }
     }
 }

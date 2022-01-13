@@ -28,6 +28,8 @@ import org.apache.flink.table.api.TableSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.flink.configuration.ConfigOptions.key;
+
 /**
  * Adbpg options.
  */
@@ -92,7 +94,7 @@ public class AdbpgOptions {
     public static final ConfigOption<Integer> BATCH_WRITE_TIMEOUT_MS =
             ConfigOptions.key("batchWriteTimeoutMs")
                     .intType()
-                    .defaultValue(5000)
+                    .defaultValue(50000)
                     .withDescription("Timeout setting");
     public static final ConfigOption<Integer> CONNECTION_MAX_ACTIVE =
             ConfigOptions.key("connectionmaxactive")
@@ -146,6 +148,9 @@ public class AdbpgOptions {
                     .defaultValue(2000000000)
                     .withDescription("cacheTTLMs");
 
+    public static final ConfigOption<Long> CONNECTION_MAX_WAIT =
+            key("connectionMaxWait").longType().defaultValue(15000L);
+
     public static boolean isCaseSensitive(ReadableConfig readableConfig) {
         switch (readableConfig.get(CASE_SENSITIVE).toString().toLowerCase()) {
             case "0":
@@ -160,6 +165,23 @@ public class AdbpgOptions {
                                 "Invalid value for config %s : %s",
                                 CASE_SENSITIVE.key(),
                                 readableConfig.get(CASE_SENSITIVE)));
+        }
+    }
+
+    public static boolean isConfigOptionTrue(ReadableConfig readableConfig, ConfigOption<Integer> target) {
+        switch (readableConfig.get(target).toString().toLowerCase()) {
+            case "0":
+            case "false":
+                return false;
+            case "1":
+            case "true":
+                return true;
+            default:
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Invalid value for config %s : %s",
+                                target.key(),
+                                readableConfig.get(target)));
         }
     }
 
@@ -294,7 +316,7 @@ public class AdbpgOptions {
         }
 
         int connectionMaxActive = config.get(CONNECTION_MAX_ACTIVE);
-        long connectionMaxWait = 60000;
+        long connectionMaxWait = config.get(CONNECTION_MAX_WAIT);
 
         DruidDataSource dataSource = new DruidDataSource();
         dataSource.setUrl(url);
@@ -313,9 +335,10 @@ public class AdbpgOptions {
         dataSource.setTestOnReturn(false);
         dataSource.setTimeBetweenEvictionRunsMillis(180000);
         dataSource.setMinEvictableIdleTimeMillis(3600000);
+        dataSource.setMaxEvictableIdleTimeMillis(9000000);
         dataSource.setRemoveAbandoned(true);
         dataSource.setRemoveAbandonedTimeout(300);
-        LOG.info("sink connector created using url=" + url + ", "
+        LOG.info("connector created using url=" + url + ", "
                 + "tableName=" + config.get(TABLE_NAME) + ", "
                 + "userName=" + userName + ", "
                 + "password=" + password + ", "

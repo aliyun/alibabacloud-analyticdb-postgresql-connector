@@ -49,6 +49,7 @@ import static org.junit.Assert.assertEquals;
 public abstract class JdbcLookupTableSourceITCaseBase {
 
     protected final String lookupTable;
+    protected final String lookupTableCaseSensitive;
 
     protected final String url;
     protected final String userName;
@@ -73,6 +74,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
 
         String postfix = RandomStringUtils.randomAlphabetic(16);
         this.lookupTable = "lookupTable_" + postfix;
+        this.lookupTableCaseSensitive = "\"lookupTable_" + postfix+"\"";
     }
 
     @Before
@@ -127,6 +129,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                 + " ("
                 + "id1 INT NOT NULL DEFAULT 0,"
                 + "id2 VARCHAR(20) NOT NULL,"
+                + "price NUMERIC(5,2) NOT NULL,"
                 + "comment1 VARCHAR(1000),"
                 + "comment2 VARCHAR(1000))";
     }
@@ -172,6 +175,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                 "CREATE TABLE lookupTable ("
                         + "  id1 INT,"
                         + "  id2 VARCHAR,"
+                        + "  price DECIMAL(5,2) ,"
                         + "  comment1 VARCHAR,"
                         + "  comment2 VARCHAR"
                         + ") WITH ("
@@ -193,11 +197,13 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                         + "  'cache' = '"
                         + cacheStrategy
                         + "',"
-                        + "  'cacheSize' = '10000'"
+                        + "  'cacheSize' = '10000"
+                        + "',"
+                        + "  'exceptionmode' = 'strict'"
                         + ")");
 
         String sqlQuery =
-                "SELECT source.id1, source.id2, L.comment1, L.comment2 FROM T AS source "
+                "SELECT source.id1, source.id2, L.price, L.comment1, L.comment2 FROM T AS source "
                         + "JOIN lookupTable for system_time as of source.proctime AS L "
                         + "ON source.id1 = L.id1 and source.id2 = L.id2";
 
@@ -210,13 +216,100 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                         .collect(Collectors.toList());
 
         List<Row> expectedRows = new ArrayList<>();
-        expectedRows.add(Row.of(1, "1", "11-c1-v1", "11-c2-v1"));
-        expectedRows.add(Row.of(1, "1", "11-c1-v1", "11-c2-v1"));
-        expectedRows.add(Row.of(1, "1", "11-c1-v2", "11-c2-v2"));
-        expectedRows.add(Row.of(1, "1", "11-c1-v2", "11-c2-v2"));
-        expectedRows.add(Row.of(2, "3", "23-c1", "23-c2"));
-        expectedRows.add(Row.of(2, "5", "25-c1", "25-c2"));
-        expectedRows.add(Row.of(3, "8", "38-c1", "38-c2"));
+        expectedRows.add(Row.of(1, "1", 500.21, "11-c1-v1", "11-c2-v1"));
+        expectedRows.add(Row.of(1, "1", 500.21, "11-c1-v1", "11-c2-v1"));
+        expectedRows.add(Row.of(1, "1", 500.22, "11-c1-v2", "11-c2-v2"));
+        expectedRows.add(Row.of(1, "1", 500.22, "11-c1-v2", "11-c2-v2"));
+        expectedRows.add(Row.of(2, "3", 500.23, "23-c1", "23-c2"));
+        expectedRows.add(Row.of(2, "5", 500.24, "25-c1", "25-c2"));
+        expectedRows.add(Row.of(3, "8", 500.25, "38-c1", "38-c2"));
+
+        List<String> expected =
+                expectedRows.stream().map(Row::toString).sorted().collect(Collectors.toList());
+
+        assertEquals(expected, result);
+    }
+
+    @Test
+    public void testLookupTableCaseSensitive() throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+        env.getConfig().enableObjectReuse();
+        EnvironmentSettings.Builder envBuilder =
+                EnvironmentSettings.newInstance().inStreamingMode().useBlinkPlanner();
+        StreamTableEnvironment tEnv = StreamTableEnvironment.create(env, envBuilder.build());
+
+        Table t =
+                tEnv.fromDataStream(
+                        env.fromCollection(
+                                Arrays.asList(
+                                        new Tuple2<>(1, "1"),
+                                        new Tuple2<>(1, "1"),
+                                        new Tuple2<>(2, "3"),
+                                        new Tuple2<>(2, "5"),
+                                        new Tuple2<>(3, "5"),
+                                        new Tuple2<>(3, "8"))),
+                        $("id1"),
+                        $("id2"),
+                        $("proctime").proctime());
+
+        tEnv.createTemporaryView("T", t);
+
+        // test lookup function
+        tEnv.executeSql(
+                "CREATE TABLE lookupTable ("
+                        + "  id1 INT,"
+                        + "  id2 VARCHAR,"
+                        + "  price DECIMAL(5,2) ,"
+                        + "  comment1 VARCHAR,"
+                        + "  comment2 VARCHAR"
+                        + ") WITH ("
+                        + "  'connector' = '"
+                        + connector
+                        + "',"
+                        + "  'url' = '"
+                        + url
+                        + "',"
+                        + "  'username' = '"
+                        + userName
+                        + "',"
+                        + "  'password' = '"
+                        + password
+                        + "',"
+                        + "  'tablename' = '"
+                        + lookupTable
+                        + "',"
+                        + "  'cache' = '"
+                        + cacheStrategy
+                        + "',"
+                        + "  'cacheSize' = '10000"
+                        + "',"
+                        + "  'exceptionmode' = 'strict"
+                        + "',"
+                        + "  'casesensitive' = '1'"
+                        + ")");
+
+        String sqlQuery =
+                "SELECT source.id1, source.id2, L.price, L.comment1, L.comment2 FROM T AS source "
+                        + "JOIN lookupTable for system_time as of source.proctime AS L "
+                        + "ON source.id1 = L.id1 and source.id2 = L.id2";
+
+        Iterator<Row> collected = tEnv.executeSql(sqlQuery).collect();
+
+        List<String> result =
+                Lists.newArrayList(collected).stream()
+                        .map(Row::toString)
+                        .sorted()
+                        .collect(Collectors.toList());
+
+        List<Row> expectedRows = new ArrayList<>();
+        expectedRows.add(Row.of(1, "1", 500.21, "11-c1-v1", "11-c2-v1"));
+        expectedRows.add(Row.of(1, "1", 500.21, "11-c1-v1", "11-c2-v1"));
+        expectedRows.add(Row.of(1, "1", 500.22, "11-c1-v2", "11-c2-v2"));
+        expectedRows.add(Row.of(1, "1", 500.22, "11-c1-v2", "11-c2-v2"));
+        expectedRows.add(Row.of(2, "3", 500.23, "23-c1", "23-c2"));
+        expectedRows.add(Row.of(2, "5", 500.24, "25-c1", "25-c2"));
+        expectedRows.add(Row.of(3, "8", 500.25, "38-c1", "38-c2"));
 
         List<String> expected =
                 expectedRows.stream().map(Row::toString).sorted().collect(Collectors.toList());
