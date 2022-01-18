@@ -81,17 +81,17 @@ public class AdbpgLookupTableSourceITCase extends JdbcLookupTableSourceITCaseBas
         Class.forName(driverClass);
         try (Connection conn = DriverManager.getConnection(url, userName, password);
                 Statement statement = conn.createStatement()) {
-            String[] fieldNames = {"id1", "id2","price","comment1", "comment2"};
+            String[] fieldNames = {"id1", "id2", "price", "comment1", "comment2"};
             statement.executeUpdate(getCreateTableSql(lookupTable));
             statement.executeUpdate(getCreateTableSql(lookupTableCaseSensitive));
 
             Object[][] data =
                     new Object[][] {
-                        new Object[] {1, "1",500.21,"11-c1-v1", "11-c2-v1"},
-                        new Object[] {1, "1",500.22, "11-c1-v2", "11-c2-v2"},
-                        new Object[] {2, "3",500.23, "23-c1", "23-c2"},
-                        new Object[] {2, "5",500.24, "25-c1", "25-c2"},
-                        new Object[] {3, "8",500.25, "38-c1", "38-c2"}
+                        new Object[] {1, "1", 500.21, "11-c1-v1", "11-c2-v1"},
+                        new Object[] {1, "1", 500.22, "11-c1-v2", "11-c2-v2"},
+                        new Object[] {2, "3", 500.23, "23-c1", "23-c2"},
+                        new Object[] {2, "5", 500.24, "25-c1", "25-c2"},
+                        new Object[] {3, "8", 500.25, "38-c1", "38-c2"}
                     };
 
             Statement stat = conn.createStatement();
@@ -116,11 +116,11 @@ public class AdbpgLookupTableSourceITCase extends JdbcLookupTableSourceITCaseBas
             String[] expectRows =
                     Arrays.stream(data)
                             .map(
-                                    row -> {
-                                        return Arrays.stream(row)
-                                                .map(Object::toString)
-                                                .collect(Collectors.joining(","));
-                                    })
+                                row -> {
+                                    return Arrays.stream(row)
+                                            .map(Object::toString)
+                                            .collect(Collectors.joining(","));
+                                })
                             .toArray(String[]::new);
             JdbcTestUtil.checkResultWithTimeout(
                     expectRows, lookupTable, fieldNames, url, userName, password, 60000L);

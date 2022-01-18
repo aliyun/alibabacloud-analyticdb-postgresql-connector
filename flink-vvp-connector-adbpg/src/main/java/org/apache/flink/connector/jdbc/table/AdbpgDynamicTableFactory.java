@@ -140,6 +140,4 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         LOG.info("Validation passed, adbpg source created successfully.");
         return new AdbpgDynamicTableSource(fieldNum, fieldNamesStr, lts, config);
     }
-
-
 }

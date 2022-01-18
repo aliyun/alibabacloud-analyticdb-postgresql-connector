@@ -23,7 +23,6 @@ import org.apache.flink.connector.jdbc.table.base.LegacyJdbcSinkFunctionITCaseBa
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.flink.connector.jdbc.table.util.AdbpgTestConfParser;
 import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
-import org.apache.flink.connector.jdbc.table.utils.StringUtils;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -47,7 +46,7 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
 
     public AdbpgDynamicSinkTest(boolean mockNullFieldValues) {
         super(
-                Arrays.asList("INTEGER", "VARCHAR"),
+                Arrays.asList("INTEGER", "VARCHAR","DECIMAL(10,2)"),
                 mockNullFieldValues,
                 TEST_TABLE_NAME,
                 new HashMap<String, String>() {
@@ -62,7 +61,8 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                                 AdbpgTestConfParser.INSTANCE.getPassword());
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
-                        this.put(AdbpgOptions.WRITE_MODE.key(), "0");
+                        this.put(AdbpgOptions.WRITE_MODE.key(), "1");
+                        this.put(AdbpgOptions.EXCEPTION_MODE.key(), "strict");
                     }
                 },
                 new HashMap<String, String>() {
@@ -78,9 +78,9 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
                         this.put(AdbpgOptions.CASE_SENSITIVE.key(), "1");
+                        this.put(AdbpgOptions.EXCEPTION_MODE.key(), "strict");
                     }
-                    }
-                ,
+                },
                 new HashMap<String, String>() {
                     {
                         this.put("connector", "adbpg-nightly");
@@ -93,6 +93,7 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                                 AdbpgTestConfParser.INSTANCE.getPassword());
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
+                        this.put(AdbpgOptions.EXCEPTION_MODE.key(), "strict");
                     }
                 });
     }

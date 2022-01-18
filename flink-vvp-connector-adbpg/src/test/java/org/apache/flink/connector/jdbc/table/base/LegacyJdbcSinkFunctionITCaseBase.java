@@ -104,6 +104,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
                 + "_value INT NOT NULL DEFAULT 0,"
                 + "f0 INT,"
                 + "f1 VARCHAR(30) NOT NULL,"
+                + "f2 DECIMAL NOT NULL,"
                 + "PRIMARY KEY (id))";
     }
 
@@ -235,7 +236,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
                 EnvironmentSettings.newInstance().useBlinkPlanner().inStreamingMode().build();
         StreamTableEnvironment bsTableEnv = StreamTableEnvironment.create(env, bsSettings);
 
-        Map<String, String> sourceOptions = createSourceOptionsForNonKeyed();
+        Map<String, String> sourceOptions = createSourceOptionsForKeyed();
 
         String sourceTableSql =
                 String.format(
@@ -271,7 +272,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
 
         List<Row> data = new ArrayList<>();
         bsTableEnv.sqlQuery("select * from source").execute().collect().forEachRemaining(data::add);
-        compareResult(data, querySinkTableResult(), false);
+        compareResult(data, querySinkTableResult(), true);
     }
 
     private void compareResult(List<Row> data, ResultSet sinkValues, boolean hasKey)
