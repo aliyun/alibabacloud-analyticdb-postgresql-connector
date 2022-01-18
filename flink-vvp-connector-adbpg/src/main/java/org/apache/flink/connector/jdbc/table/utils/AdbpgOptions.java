@@ -89,7 +89,7 @@ public class AdbpgOptions {
     public static final ConfigOption<Integer> BATCH_SIZE =
             ConfigOptions.key("batchsize")
                     .intType()
-                    .noDefaultValue()
+                    .defaultValue(50000)
                     .withDescription("batch size for data import");
     public static final ConfigOption<Integer> BATCH_WRITE_TIMEOUT_MS =
             ConfigOptions.key("batchWriteTimeoutMs")

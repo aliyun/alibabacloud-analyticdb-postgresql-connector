@@ -74,7 +74,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
 
         String postfix = RandomStringUtils.randomAlphabetic(16);
         this.lookupTable = "lookupTable_" + postfix;
-        this.lookupTableCaseSensitive = "\"lookupTable_" + postfix+"\"";
+        this.lookupTableCaseSensitive = "\"lookupTable_" + postfix + "\"";
     }
 
     @Before
@@ -112,7 +112,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
 
             String[] expectRows =
                     Arrays.stream(data)
-                            .map( row -> {
+                            .map(row -> {
                                 return Arrays.stream(row)
                                                 .map(Object::toString)
                                                 .collect(Collectors.joining(","));

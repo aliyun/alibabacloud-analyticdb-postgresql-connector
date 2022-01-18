@@ -91,7 +91,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
     private int cacheSize;
     private int cacheTTLMs;
     private int usePool = 1;
-    private ReadableConfig config ;
+    private ReadableConfig config;
     private transient DruidDataSource dataSource = null;
 
     // Primary key list and non-primary field names
@@ -121,14 +121,14 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
         this.connectionMaxActive = config.get(CONNECTION_MAX_ACTIVE);
         this.exceptionMode = config.get(EXCEPTION_MODE);
         this.targetSchema = config.get(TARGET_SCHEMA);
-        this.caseSensitive = isConfigOptionTrue(config,CASE_SENSITIVE);
+        this.caseSensitive = isConfigOptionTrue(config, CASE_SENSITIVE);
         this.joinMaxRows = config.get(JOINMAXROWS);
         this.cacheStrategy = config.get(CACHE);
         this.cacheSize = config.get(CACHESIZE);
         this.cacheTTLMs = config.get(CACHETTLMS);
         this.keyNames = keyNames;
         this.keyTypes = keyTypes;
-        this.verbose = config.get(VERBOSE);;
+        this.verbose = config.get(VERBOSE);
 
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
         this.escapedFieldNames = joinerOnComma.join(fieldNamesStr);
@@ -340,7 +340,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
         } else if (t instanceof DecimalType) {
             final int precision = ((DecimalType) t).getPrecision();
             final int scale = ((DecimalType) t).getScale();
-            statement.setBigDecimal(statindex, rowdata.getDecimal(index,precision,scale).toBigDecimal());
+            statement.setBigDecimal(statindex, rowdata.getDecimal(index, precision, scale).toBigDecimal());
         } else {
             throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
         }
@@ -379,7 +379,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
             return Float.parseFloat(value.toString());
         } else if (t instanceof DoubleType) {
             return Double.parseDouble(value.toString());
-        }else if (t instanceof DecimalType) {
+        } else if (t instanceof DecimalType) {
             final int precision = ((DecimalType) t).getPrecision();
             final int scale = ((DecimalType) t).getScale();
             // using decimal(20, 0) to support db type bigint unsigned, user should define
