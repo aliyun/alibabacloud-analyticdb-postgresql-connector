@@ -104,7 +104,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
                 + "_value INT NOT NULL DEFAULT 0,"
                 + "f0 INT,"
                 + "f1 VARCHAR(30) NOT NULL,"
-                + "f2 DECIMAL NOT NULL,"
+                + "f2 DECIMAL ,"
                 + "PRIMARY KEY (id))";
     }
 
