@@ -62,6 +62,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZ
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONFLICT_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
@@ -73,6 +74,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USE_COPY;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.VERBOSE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MODE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
 
 /**
  * ADBPG sink Implementation.
@@ -81,7 +83,6 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MOD
 public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful {
 
     private final ReadableConfig config;
-    public static final String CONNECTOR_TYPE = "adbpg-nightly";
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
     private static volatile boolean existsPrimaryKeys = false;
     String[] fieldNamesStr;
@@ -163,6 +164,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.caseSensitive = AdbpgOptions.isConfigOptionTrue(config, CASE_SENSITIVE);
         this.writeMode = config.get(WRITE_MODE);
         this.verbose = config.get(VERBOSE);
+        this.retryWaitTime = config.get(RETRY_WAIT_TIME);
         this.fieldNum = fieldNum;
         this.lts = lts;
         this.rowDataSerializer = new RowDataSerializer(this.lts);
@@ -852,7 +854,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             } else if (t instanceof DateType) {
                 int datanum = row.getInt(i);
                 DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                output[i] = "'" + ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
+                output[i] = "'" + ymdhmsFormat.format(datanum * 24 * 60 * 60 * 1000L).split(" ")[0] + "'";
             } else if (t instanceof VarCharType || t instanceof CharType) {
                 output[i] = toField(row.getString(i).toString());
             } else if (t instanceof FloatType) {
@@ -898,7 +900,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             } else if (t instanceof DateType) {
                 int datanum = row.getInt(i);
                 DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                output[i] = "'" + ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
+                output[i] = "'" + ymdhmsFormat.format(datanum * 24 * 60 * 60 * 1000L).split(" ")[0] + "'";
             } else if (t instanceof VarCharType || t instanceof CharType) {
                 output[i] = toCopyField(row.getString(i).toString());
             } else if (t instanceof FloatType) {
@@ -952,7 +954,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             } else if (t instanceof DateType) {
                 int datanum = row.getInt(i);
                 DateFormat ymdhmsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                valuestr = "'" + ymdhmsFormat.format(datanum * 1000).split(" ")[0] + "'";
+                valuestr = "'" + ymdhmsFormat.format(datanum * 24 * 60 * 60 * 1000L).split(" ")[0] + "'";
             } else if (t instanceof VarCharType || t instanceof CharType) {
                 valuestr = toField(row.getString(i).toString());
             } else if (t instanceof FloatType) {

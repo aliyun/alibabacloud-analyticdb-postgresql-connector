@@ -35,6 +35,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
+
 /** Tests the adbpg sink. */
 @RunWith(Parameterized.class)
 public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
@@ -46,12 +48,12 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
 
     public AdbpgDynamicSinkTest(boolean mockNullFieldValues) {
         super(
-                Arrays.asList("INTEGER", "VARCHAR","DECIMAL(10,2)"),
+                Arrays.asList("INTEGER", "VARCHAR", "DECIMAL(10,2)", "DOUBLE", "DATE", "FLOAT", "TIMESTAMP"),
                 mockNullFieldValues,
                 TEST_TABLE_NAME,
                 new HashMap<String, String>() {
                     {
-                        this.put("connector", "adbpg-nightly");
+                        this.put("connector", CONNECTOR_TYPE);
                         this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
                         this.put(
                                 AdbpgOptions.USERNAME.key(),
@@ -67,7 +69,7 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                 },
                 new HashMap<String, String>() {
                     {
-                        this.put("connector", "adbpg-nightly");
+                        this.put("connector", CONNECTOR_TYPE);
                         this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
                         this.put(
                                 AdbpgOptions.USERNAME.key(),
@@ -83,7 +85,7 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                 },
                 new HashMap<String, String>() {
                     {
-                        this.put("connector", "adbpg-nightly");
+                        this.put("connector", CONNECTOR_TYPE);
                         this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
                         this.put(
                                 AdbpgOptions.USERNAME.key(),

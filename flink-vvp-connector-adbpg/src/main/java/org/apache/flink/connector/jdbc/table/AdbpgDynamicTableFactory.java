@@ -23,6 +23,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRI
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONFLICT_MODE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTION_MAX_ACTIVE;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
@@ -80,7 +81,7 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
 
     @Override
     public String factoryIdentifier() {
-        return "adbpg-nightly";
+        return CONNECTOR_TYPE;
     }
 
     @Override

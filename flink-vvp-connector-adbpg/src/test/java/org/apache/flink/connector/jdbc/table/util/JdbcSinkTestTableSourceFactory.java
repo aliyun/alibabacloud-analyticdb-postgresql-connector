@@ -287,11 +287,21 @@ public class JdbcSinkTestTableSourceFactory implements DynamicTableSourceFactory
                 case INTEGER:
                     rowData.setField(i + 2, value);
                     break;
+                case FLOAT:
+                    rowData.setField(i + 2, (float) value);
+                    break;
+                case DOUBLE:
+                    rowData.setField(i + 2, (double) value);
+                    break;
                 case DECIMAL:
                     rowData.setField(
                             i + 2,
                             DecimalData.fromBigDecimal(
                                     new BigDecimal(value), DECIMAL_PRECISION, DECIMAL_SCALE));
+                    break;
+                case DATE:
+                    rowData.setField(
+                            i + 2, value);
                     break;
                 case TIMESTAMP_WITHOUT_TIME_ZONE:
                 case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
