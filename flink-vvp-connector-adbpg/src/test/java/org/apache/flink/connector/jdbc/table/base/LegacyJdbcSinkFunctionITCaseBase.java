@@ -105,6 +105,10 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
                 + "f0 INT,"
                 + "f1 VARCHAR(30) NOT NULL,"
                 + "f2 DECIMAL ,"
+                + "f3 DOUBLE PRECISION,"
+                + "f4 DATE,"
+                + "f5 REAL,"
+                + "f6 TIMESTAMP,"
                 + "PRIMARY KEY (id))";
     }
 
@@ -174,7 +178,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
 
         List<Row> data = new ArrayList<>();
         bsTableEnv.sqlQuery("select * from source").execute().collect().forEachRemaining(data::add);
-        compareResult(data, querySinkTableResult(), true);
+        compareResultStr(data, querySinkTableResult(), true);
     }
 
     @Test
@@ -222,7 +226,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
 
         List<Row> data = new ArrayList<>();
         bsTableEnv.sqlQuery("select * from source").execute().collect().forEachRemaining(data::add);
-        compareResult(data, querySinkTableResult(), false);
+        compareResultStr(data, querySinkTableResult(), false);
     }
 
     @Test
@@ -272,7 +276,7 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
 
         List<Row> data = new ArrayList<>();
         bsTableEnv.sqlQuery("select * from source").execute().collect().forEachRemaining(data::add);
-        compareResult(data, querySinkTableResult(), true);
+        compareResultStr(data, querySinkTableResult(), true);
     }
 
     private void compareResult(List<Row> data, ResultSet sinkValues, boolean hasKey)
@@ -292,6 +296,35 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
             }
 
             assertEquals(expectedResult, result);
+        } finally {
+            sinkValues.close();
+        }
+    }
+
+    private void compareResultStr(List<Row> data, ResultSet sinkValues, boolean hasKey)
+            throws SQLException {
+        List<Row> expectedResult = computeExpectedResultOrderByIndex(data, hasKey);
+
+        List<Row> result = new ArrayList<>();
+        try {
+            int fieldCount = sinkValues.getMetaData().getColumnCount();
+            while (sinkValues.next()) {
+                Object[] array = new Object[fieldCount];
+                for (int i = 0; i < fieldCount; ++i) {
+                    array[i] = sinkValues.getObject(i + 1);
+                }
+
+                result.add(Row.ofKind(RowKind.INSERT, array));
+            }
+            List<String> result1 = expectedResult.stream()
+                            .map(Row::toString)
+                            .sorted()
+                            .collect(Collectors.toList());
+            List<String> result2 = result.stream()
+                    .map(Row::toString)
+                    .sorted()
+                    .collect(Collectors.toList());
+            assertEquals(result1, result2);
         } finally {
             sinkValues.close();
         }

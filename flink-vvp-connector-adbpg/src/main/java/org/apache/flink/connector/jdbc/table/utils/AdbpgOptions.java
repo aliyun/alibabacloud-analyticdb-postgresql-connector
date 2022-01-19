@@ -36,7 +36,7 @@ import static org.apache.flink.configuration.ConfigOptions.key;
 public class AdbpgOptions {
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOptions.class);
 
-    public static final String CONNECTOR_TYPE = "adbpg-nightly";
+    public static final String CONNECTOR_TYPE = "adbpg-nightly-1.13";
     public static final String DRIVER_CLASS = "org.postgresql.Driver";
 
     public static final ConfigOption<String> URL =
