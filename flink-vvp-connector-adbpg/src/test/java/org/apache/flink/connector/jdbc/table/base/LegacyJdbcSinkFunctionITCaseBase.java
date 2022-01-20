@@ -108,7 +108,6 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
                 + "f3 DOUBLE PRECISION,"
                 + "f4 DATE,"
                 + "f5 REAL,"
-                + "f6 TIMESTAMP,"
                 + "PRIMARY KEY (id))";
     }
 

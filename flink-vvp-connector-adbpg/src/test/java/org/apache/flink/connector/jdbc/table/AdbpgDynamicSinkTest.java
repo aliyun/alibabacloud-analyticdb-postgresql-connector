@@ -48,7 +48,7 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
 
     public AdbpgDynamicSinkTest(boolean mockNullFieldValues) {
         super(
-                Arrays.asList("INTEGER", "VARCHAR", "DECIMAL(10,2)", "DOUBLE", "DATE", "FLOAT", "TIMESTAMP"),
+                Arrays.asList("INTEGER", "VARCHAR", "DECIMAL(10,2)", "DOUBLE", "DATE", "FLOAT"),
                 mockNullFieldValues,
                 TEST_TABLE_NAME,
                 new HashMap<String, String>() {

@@ -36,7 +36,7 @@ import static org.apache.flink.configuration.ConfigOptions.key;
 public class AdbpgOptions {
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOptions.class);
 
-    public static final String CONNECTOR_TYPE = "adbpg-nightly-1.13";
+    public static final String CONNECTOR_TYPE = "adbpg-nightly-1.12";
     public static final String DRIVER_CLASS = "org.postgresql.Driver";
 
     public static final ConfigOption<String> URL =
@@ -338,7 +338,7 @@ public class AdbpgOptions {
         dataSource.setMaxEvictableIdleTimeMillis(9000000);
         dataSource.setRemoveAbandoned(true);
         dataSource.setRemoveAbandonedTimeout(300);
-        LOG.info("connector created using url=" + url + ", "
+        LOG.info("connector " + CONNECTOR_TYPE + " created using url=" + url + ", "
                 + "tableName=" + config.get(TABLE_NAME) + ", "
                 + "userName=" + userName + ", "
                 + "password=" + password + ", "
