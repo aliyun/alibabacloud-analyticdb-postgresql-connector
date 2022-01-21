@@ -33,6 +33,8 @@ import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
+
 /** Itcase for dim join. */
 @RunWith(Parameterized.class)
 public class AdbpgLookupTableSourceITCase extends JdbcLookupTableSourceITCaseBase {
@@ -59,15 +61,15 @@ public class AdbpgLookupTableSourceITCase extends JdbcLookupTableSourceITCaseBas
 
         paramList.add(
                 new Object[] {
-                    "adbpg-nightly", adbpgURL, adbpgUserName, adbpgPassword, adbpgDriverClass, "all"
+                        CONNECTOR_TYPE, adbpgURL, adbpgUserName, adbpgPassword, adbpgDriverClass, "all"
                 });
         paramList.add(
                 new Object[] {
-                    "adbpg-nightly", adbpgURL, adbpgUserName, adbpgPassword, adbpgDriverClass, "lru"
+                        CONNECTOR_TYPE, adbpgURL, adbpgUserName, adbpgPassword, adbpgDriverClass, "lru"
                 });
         paramList.add(
                 new Object[] {
-                    "adbpg-nightly", adbpgURL, adbpgUserName, adbpgPassword, adbpgDriverClass, "none"
+                        CONNECTOR_TYPE, adbpgURL, adbpgUserName, adbpgPassword, adbpgDriverClass, "none"
                 });
 
         return paramList;
