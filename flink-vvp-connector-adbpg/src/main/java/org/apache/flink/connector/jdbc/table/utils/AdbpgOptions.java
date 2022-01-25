@@ -444,7 +444,7 @@ public class AdbpgOptions {
         validateStringEnumConfigOption(config, EXCEPTION_MODE, ExceptionMode.stringList());
         validateIntegerEnumConfigOption(config, RESERVEMS, ZeroOrOneEnum.integerList());
         validateIntegerEnumConfigOption(config, CASE_SENSITIVE, ZeroOrOneEnum.integerList());
-        validateIntegerEnumConfigOption(config, WRITE_MODE, ZeroOrOneEnum.integerList());
+        validateIntegerEnumConfigOption(config, WRITE_MODE, WriteMode.integerList());
         validateIntegerEnumConfigOption(config, VERBOSE, ZeroOrOneEnum.integerList());
     }
 
