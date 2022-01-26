@@ -131,7 +131,8 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                 + "id2 VARCHAR(20) NOT NULL,"
                 + "price NUMERIC(5,2) NOT NULL,"
                 + "comment1 VARCHAR(1000),"
-                + "comment2 VARCHAR(1000))";
+                + "comment2 VARCHAR(1000),"
+                + "comment3 VARCHAR(1000) default null)";
     }
 
     @After
@@ -177,7 +178,8 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                         + "  id2 VARCHAR,"
                         + "  price DECIMAL(5,2) ,"
                         + "  comment1 VARCHAR,"
-                        + "  comment2 VARCHAR"
+                        + "  comment2 VARCHAR,"
+                        + "  comment3 VARCHAR"
                         + ") WITH ("
                         + "  'connector' = '"
                         + connector
@@ -199,7 +201,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                         + "',"
                         + "  'cacheSize' = '10000"
                         + "',"
-                        + "  'exceptionmode' = 'strict'"
+                        + "  'exceptionmode' = 'ignore'"
                         + ")");
 
         String sqlQuery =
@@ -262,7 +264,8 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                         + "  id2 VARCHAR,"
                         + "  price DECIMAL(5,2) ,"
                         + "  comment1 VARCHAR,"
-                        + "  comment2 VARCHAR"
+                        + "  comment2 VARCHAR,"
+                        + "  comment3 VARCHAR"
                         + ") WITH ("
                         + "  'connector' = '"
                         + connector
@@ -284,7 +287,7 @@ public abstract class JdbcLookupTableSourceITCaseBase {
                         + "',"
                         + "  'cacheSize' = '10000"
                         + "',"
-                        + "  'exceptionmode' = 'strict"
+                        + "  'exceptionmode' = 'ignore"
                         + "',"
                         + "  'casesensitive' = '1'"
                         + ")");
