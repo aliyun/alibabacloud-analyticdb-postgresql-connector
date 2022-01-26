@@ -349,8 +349,14 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
     private RowData toResultRow(ResultSet resultset) throws Exception {
         GenericRowData genericRowData = new GenericRowData(fieldNamesStr.length);
         for (int pos = 0; pos < fieldNamesStr.length; pos++) {
-            Object field = resultset.getObject(pos + 1);
-            genericRowData.setField(pos, dimDeserialize(pos + 1, field));
+            try {
+                Object field = resultset.getObject(pos + 1);
+                genericRowData.setField(pos, dimDeserialize(pos + 1, field));
+            } catch (Exception e) {
+                if ("strict".equalsIgnoreCase(exceptionMode)) {
+                    throw e;
+                }
+            }
         }
         return genericRowData;
     }
