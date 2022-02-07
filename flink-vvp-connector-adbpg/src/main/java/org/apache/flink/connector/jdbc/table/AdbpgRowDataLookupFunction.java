@@ -4,6 +4,7 @@ import com.alibaba.druid.pool.DruidDataSource;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
+import org.apache.flink.connector.jdbc.table.utils.JdbcRowConverter;
 import org.apache.flink.shaded.guava18.com.google.common.base.Joiner;
 import org.apache.flink.shaded.guava18.com.google.common.cache.Cache;
 import org.apache.flink.shaded.guava18.com.google.common.cache.CacheBuilder;
@@ -14,6 +15,7 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.table.functions.TableFunction;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.TimestampType;
@@ -103,6 +105,9 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
     // datasource
     private String driverClassName = "org.postgresql.Driver";
     private transient Cache<RowData, List<RowData>> cache;
+    protected final LogicalType[] lookupKeyTypes;
+    protected final JdbcRowConverter lookupKeyRowConverter;
+    protected final JdbcRowConverter jdbcRowConverter;
 
     public AdbpgRowDataLookupFunction(int fieldNum,
                                       String[] fieldNamesStr, LogicalType[] lts, String[] keyNames,
@@ -132,6 +137,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
 
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
         this.escapedFieldNames = joinerOnComma.join(fieldNamesStr);
+        this.lookupKeyTypes = new LogicalType[keyNames.length];
         List<String> keyFilters = new ArrayList<>();
         for (int i = 0; i < keyNames.length; i++) {
             if (this.caseSensitive) {
@@ -139,7 +145,10 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
             } else {
                 keyFilters.add(keyNames[i] + " = ?");
             }
+            this.lookupKeyTypes[i] = keyTypes[i];
         }
+        this.lookupKeyRowConverter = new JdbcRowConverter(lookupKeyTypes);
+        this.jdbcRowConverter = new JdbcRowConverter(lts);
         String queryKeys = StringUtils.join(keyFilters, " AND ");
         if (this.caseSensitive) {
             this.queryTemplate = "SELECT " + escapedFieldNames
@@ -262,9 +271,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
         try {
             statement = connection.prepareStatement(queryTemplate);
             statement.clearParameters();
-            for (int i = 0; i < keyNames.length; i++) {
-                setStatementParameter(statement, i, keyRow);
-            }
+            statement = lookupKeyRowConverter.toExternal(keyRow, statement);
             ResultSet resultSet = statement.executeQuery();
             int cnt = 0;
             while (cnt < joinMaxRows) {
@@ -275,7 +282,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
                 if (!resultSet.next()) {
                     break;
                 }
-                rows.add(toResultRow(resultSet));
+                rows.add(jdbcRowConverter.toInternal(resultSet, this.exceptionMode));
                 cnt++;
             }
             if (1 == this.verbose) {
@@ -308,95 +315,4 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
         }
     }
 
-    private void setStatementParameter(PreparedStatement statement, int index, RowData rowdata) throws SQLException {
-        LogicalType t = lts[index];
-        int statindex = index + 1;
-        if (t instanceof BooleanType) {
-            statement.setBoolean(statindex, rowdata.getBoolean(index));
-        } else if (t instanceof TimestampType) {
-            statement.setTimestamp(statindex, rowdata.getTimestamp(index, 8).toTimestamp());
-        } else if (t instanceof TimeType) {
-            Object o = rowdata.getString(index).toString();
-            Time t2 = (Time) o;
-            statement.setTime(statindex, t2);
-        } else if (t instanceof DateType) {
-            Object o = rowdata.getString(index).toString();
-            Date d2 = (Date) o;
-            statement.setDate(statindex, d2);
-        } else if (t instanceof VarCharType || t instanceof CharType) {
-            statement.setString(statindex, rowdata.getString(index).toString());
-        } else if (t instanceof SmallIntType) {
-            statement.setShort(statindex, rowdata.getShort(index));
-        } else if (t instanceof IntType) {
-            statement.setInt(statindex, rowdata.getInt(index));
-        } else if (t instanceof TinyIntType) {
-            statement.setByte(statindex, rowdata.getByte(index));
-        } else if (t instanceof BigIntType) {
-            statement.setLong(statindex, rowdata.getLong(index));
-        } else if (t instanceof FloatType) {
-            statement.setFloat(statindex, rowdata.getFloat(index));
-        } else if (t instanceof DoubleType) {
-            statement.setDouble(statindex, rowdata.getDouble(index));
-        } else if (t instanceof DecimalType) {
-            final int precision = ((DecimalType) t).getPrecision();
-            final int scale = ((DecimalType) t).getScale();
-            statement.setBigDecimal(statindex, rowdata.getDecimal(index, precision, scale).toBigDecimal());
-        } else {
-            throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
-        }
-    }
-
-    private RowData toResultRow(ResultSet resultset) throws Exception {
-        GenericRowData genericRowData = new GenericRowData(fieldNamesStr.length);
-        for (int pos = 0; pos < fieldNamesStr.length; pos++) {
-            try {
-                Object field = resultset.getObject(pos + 1);
-                genericRowData.setField(pos, dimDeserialize(pos + 1, field));
-            } catch (Exception e) {
-                if ("strict".equalsIgnoreCase(exceptionMode)) {
-                    throw e;
-                }
-            }
-        }
-        return genericRowData;
-    }
-
-    private Object dimDeserialize(int index, Object value) {
-        LogicalType t = lts[index - 1];
-        if (t instanceof BooleanType) {
-            return (Boolean) value;
-        } else if (t instanceof TimestampType) {
-            return TimestampData.fromTimestamp((Timestamp) value);
-        } else if (t instanceof TimeType) {
-            return (Time) value;
-        } else if (t instanceof DateType) {
-            return (Date) value;
-        } else if (t instanceof VarCharType || t instanceof CharType) {
-            return StringData.fromString(value.toString());
-        } else if (t instanceof SmallIntType) {
-            return Short.parseShort(value.toString());
-        } else if (t instanceof IntType) {
-            return Integer.parseInt(value.toString());
-        } else if (t instanceof TinyIntType) {
-            return Byte.parseByte(value.toString());
-        } else if (t instanceof BigIntType) {
-            return Long.parseLong(value.toString());
-        } else if (t instanceof FloatType) {
-            return Float.parseFloat(value.toString());
-        } else if (t instanceof DoubleType) {
-            return Double.parseDouble(value.toString());
-        } else if (t instanceof DecimalType) {
-            final int precision = ((DecimalType) t).getPrecision();
-            final int scale = ((DecimalType) t).getScale();
-            // using decimal(20, 0) to support db type bigint unsigned, user should define
-            // decimal(20, 0) in SQL,
-            // but other precision like decimal(30, 0) can work too from lenient consideration.
-            return value instanceof BigInteger
-                            ? DecimalData.fromBigDecimal(
-                            new BigDecimal((BigInteger) value, 0), precision, scale)
-                            : DecimalData.fromBigDecimal((BigDecimal) value, precision, scale);
-        }  else {
-            throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
-        }
-    }
 }
