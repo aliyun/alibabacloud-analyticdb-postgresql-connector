@@ -8,38 +8,15 @@ import org.apache.flink.connector.jdbc.table.utils.JdbcRowConverter;
 import org.apache.flink.shaded.guava18.com.google.common.base.Joiner;
 import org.apache.flink.shaded.guava18.com.google.common.cache.Cache;
 import org.apache.flink.shaded.guava18.com.google.common.cache.CacheBuilder;
-import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.functions.FunctionContext;
 import org.apache.flink.table.functions.TableFunction;
-import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.BooleanType;
-import org.apache.flink.table.types.logical.FloatType;
-import org.apache.flink.table.types.logical.TimeType;
-import org.apache.flink.table.types.logical.VarCharType;
-import org.apache.flink.table.types.logical.DateType;
-import org.apache.flink.table.types.logical.IntType;
-import org.apache.flink.table.types.logical.TinyIntType;
-import org.apache.flink.table.types.logical.SmallIntType;
-import org.apache.flink.table.types.logical.DoubleType;
-import org.apache.flink.table.types.logical.CharType;
-import org.apache.flink.table.types.logical.BigIntType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.net.URL;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -314,5 +291,4 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
             throw lastError;
         }
     }
-
 }
