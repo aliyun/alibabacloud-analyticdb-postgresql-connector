@@ -18,8 +18,9 @@ import org.apache.flink.table.types.inference.TypeTransformation;
 import org.apache.flink.table.types.inference.TypeTransformations;
 import org.apache.flink.table.types.utils.DataTypeUtils;
 
+/** copy from ververica-connectors to support JdbcRowConverter **/
 @Internal
-public class JdbcTypeUtil {
+public final class JdbcTypeUtil {
     private static final Map<TypeInformation<?>, Integer> TYPE_MAPPING;
     private static final Map<Integer, String> SQL_TYPE_NAMES;
 
@@ -28,7 +29,7 @@ public class JdbcTypeUtil {
 
     public static int typeInformationToSqlType(TypeInformation<?> type) {
         if (TYPE_MAPPING.containsKey(type)) {
-            return (Integer)TYPE_MAPPING.get(type);
+            return (Integer) TYPE_MAPPING.get(type);
         } else if (!(type instanceof ObjectArrayTypeInfo) && !(type instanceof PrimitiveArrayTypeInfo)) {
             throw new IllegalArgumentException("Unsupported type: " + type);
         } else {
@@ -37,11 +38,11 @@ public class JdbcTypeUtil {
     }
 
     public static String getTypeName(int type) {
-        return (String)SQL_TYPE_NAMES.get(type);
+        return (String) SQL_TYPE_NAMES.get(type);
     }
 
     public static String getTypeName(TypeInformation<?> type) {
-        return (String)SQL_TYPE_NAMES.get(typeInformationToSqlType(type));
+        return (String) SQL_TYPE_NAMES.get(typeInformationToSqlType(type));
     }
 
     public static TableSchema normalizeTableSchema(TableSchema schema) {
@@ -51,7 +52,6 @@ public class JdbcTypeUtil {
                 DataType type = DataTypeUtils.transform(c.getType(), new TypeTransformation[]{TypeTransformations.timeToSqlTypes()});
                 physicalSchemaBuilder.field(c.getName(), type);
             }
-
         });
         return physicalSchemaBuilder.build();
     }
