@@ -266,7 +266,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             this.upsertConverter = new JdbcRowConverter(updateStatementFieldTypes);
         }
         this.rowConverter = new JdbcRowConverter(lts);
-        this.copyModeRowConverter = new StringFormatRowConverter(lts, this::toCopyField);
+        this.copyModeRowConverter = new StringFormatRowConverter(lts);
     }
 
     private static String toField(Object o) {
@@ -279,17 +279,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             str = str.replaceAll("'", "''");
         }
         return "'" + str + "'";
-    }
-
-    private String toCopyField(Object o) {
-        if (null == o) {
-            return "null";
-        }
-        String str = o.toString();
-        if (str.indexOf("\\") >= 0) {
-            str = str.replaceAll("\\\\", "\\\\\\\\");
-        }
-        return str;
     }
 
     @Override
@@ -643,6 +632,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 preparedStatement.executeBatch();
                 break;
             } catch (SQLException exception) {
+                if (exception instanceof BatchUpdateException) {
+                    exception = ((BatchUpdateException) exception).getNextException();
+                }
                 LOG.error(
                         String.format(
                                 "Execute sql error, sql: %s, retryTimes: %d", sql, retryTime),
@@ -696,7 +688,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 rawConn = dataSource.getConnection();
                 baseConn = (BaseConnection) (rawConn.getConnection());
                 CopyManager manager = new CopyManager(baseConn);
-                String sql =  adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN");
+                String sql =  adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN", conflictMode);
                 manager.copyIn(sql, inputStream);
                 break;
             } catch (SQLException e) {

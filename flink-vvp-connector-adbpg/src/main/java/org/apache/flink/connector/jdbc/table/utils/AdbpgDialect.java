@@ -75,11 +75,17 @@ public class AdbpgDialect implements Serializable {
                         + updateClause;
     }
 
-    public String getCopyStatement(String tableName, String[] fieldNames, String file) {
+    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode) {
         String columns =
                 Arrays.stream(fieldNames)
                         .map(this::quoteIdentifier)
                         .collect(Collectors.joining(", "));
+        String conflictAction = "";
+        if ("ignore".equalsIgnoreCase(conflictMode)) {
+            conflictAction = " DO on conflict DO nothing";
+        } else {
+            conflictAction = " DO on conflict DO update";
+        }
         return "COPY "
                 + quoteIdentifier(targetSchema)
                 + "."
@@ -88,7 +94,9 @@ public class AdbpgDialect implements Serializable {
                 + columns
                 + ")"
                 + " FROM "
-                + file;
+                + file
+                + " "
+                + conflictAction;
     }
 
     public String getDeleteStatementWithNull(

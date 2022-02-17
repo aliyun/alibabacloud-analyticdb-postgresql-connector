@@ -38,12 +38,21 @@ public class StringFormatRowConverter implements Serializable {
 
     protected final StringFormatRowConverter.StringFormatConverter[] toStringConverters;
     protected final LogicalType[] fieldLogicalTypes;
-    @Nullable protected final transient Function<String, String> stringEscaper;
+
+    private String toCopyField(String fieldValue) {
+        if (null == fieldValue) {
+            return "null";
+        }
+
+        if (fieldValue.contains("\\")) {
+            return fieldValue.replaceAll("\\\\", "\\\\\\\\");
+        }
+        return fieldValue;
+    }
 
     public StringFormatRowConverter(
-            LogicalType[] fieldLogicalTypes, @Nullable Function<String, String> stringEscaper) {
+            LogicalType[] fieldLogicalTypes) {
         this.fieldLogicalTypes = fieldLogicalTypes;
-        this.stringEscaper = stringEscaper;
         this.toStringConverters = new StringFormatConverter[fieldLogicalTypes.length];
         for (int i = 0; i < fieldLogicalTypes.length; i++) {
             toStringConverters[i] = createNullableStringConverter(fieldLogicalTypes[i]);
@@ -109,18 +118,13 @@ public class StringFormatRowConverter implements Serializable {
                     final int decimalScale = ((DecimalType) type).getScale();
                     return String.valueOf(
                             val.getDecimal(index, decimalPrecision, decimalScale)
-                                    .toBigDecimal()
-                                    .doubleValue());
+                                    .toBigDecimal());
                 };
 
             case CHAR:
             case VARCHAR:
                 // value is BinaryString
-                if (stringEscaper != null) {
-                    return (val, index) -> stringEscaper.apply(val.getString(index).toString());
-                } else {
-                    return (val, index) -> val.getString(index).toString();
-                }
+                return (val, index) -> toCopyField(val.getString(index).toString());
             case BINARY:
             case VARBINARY:
                 return (val, index) -> new String(val.getBinary(index));
