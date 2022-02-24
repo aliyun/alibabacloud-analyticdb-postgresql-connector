@@ -24,14 +24,11 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.TimestampType;
 
-import javax.annotation.Nullable;
-
 import java.io.Serializable;
 import java.sql.Date;
 import java.sql.Time;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.function.Function;
 
 /** String format converter. */
 public class StringFormatRowConverter implements Serializable {
