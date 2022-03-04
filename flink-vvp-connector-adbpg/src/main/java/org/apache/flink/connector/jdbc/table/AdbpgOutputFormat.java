@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
@@ -129,6 +130,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private String insertClause = "INSERT INTO ";
     private String timeZone = "Asia/Shanghai";
     private long inputCount = 0;
+    // version after which support upsert for partitioned table
+    private long adbpg_version = 6360;
+    private boolean support_upsert = true;
     // datasource
     private transient DruidDataSource dataSource = null;
     private transient ScheduledExecutorService executorService;
@@ -285,6 +289,38 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     public void configure(Configuration configuration) {
     }
 
+    private long getVersion() {
+        long res = 0;
+        try {
+            connection = dataSource.getConnection();
+            statement = connection.createStatement();
+            ResultSet rs = statement.executeQuery("show adbpg_version ;");
+            if (rs.next()) {
+                String versionStr = rs.getString("adbpg_version");
+                res = Long.parseLong(versionStr.replaceAll("\\.", ""));
+            }
+        } catch (SQLException e) {
+            LOG.warn("Find old version ADBPG", e);
+        }
+        return res;
+    }
+
+    private boolean checkPartition() {
+        boolean res = false;
+        try {
+            String sql = String.format("select count(*) from pg_inherits where inhparent::regclass='%s'::regclass", tableName);
+            connection = dataSource.getConnection();
+            statement = connection.createStatement();
+            ResultSet rs = statement.executeQuery(sql);
+            if (rs.next()) {
+                res = rs.getLong("count") != 0;
+            }
+        } catch (SQLException e) {
+            LOG.warn("Error encountered during check table partiton", e);
+        }
+        return res;
+    }
+
     @Override
     public void open(int taskNumber, int numTasks) throws IOException {
 
@@ -292,6 +328,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
+            if (getVersion() < adbpg_version && checkPartition()) {
+                support_upsert = false;
+            }
         } catch (SQLException e) {
             LOG.error("Init DataSource Or Get Connection Error!", e);
             throw new IOException("cannot get connection for url: " + url + ", userName: " + userName + ", password: " + password, e);
@@ -551,7 +590,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 long end = System.currentTimeMillis();
                 reportMetric(rows, start, end, bps);
             } else if (writeMode == 2) {
-                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr);
+                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
                 executeSqlWithPrepareStatement(sql, rows, rowConverter, false);
             } else {
                 // write mode = 0
@@ -571,7 +610,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                             && e.getMessage().indexOf("duplicate key") != -1
                             && e.getMessage().indexOf("violates unique constraint") != -1
                             && "upsert".equalsIgnoreCase(conflictMode))
-                )) {
+            )) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -700,7 +739,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
         long end = System.currentTimeMillis();
         reportMetric(valueList, start, end, valueList.size() * sql.length() * 2);
-        LOG.debug("%s operation succeed on %d records ", del == false?"Delete":"Write",valueList.size());
+        LOG.debug("%s operation succeed on %d records ", del == false ? "Delete" : "Write", valueList.size());
     }
 
     private long executeCopy(byte[] data) throws SQLException, IOException {
@@ -720,7 +759,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 rawConn = dataSource.getConnection();
                 baseConn = (BaseConnection) (rawConn.getConnection());
                 CopyManager manager = new CopyManager(baseConn);
-                String sql =  adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN", conflictMode);
+                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN", conflictMode, support_upsert);
                 manager.copyIn(sql, inputStream);
                 break;
             } catch (SQLException e) {
@@ -767,7 +806,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     }
 
     private void upsertRow(RowData row) {
-        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr);
+        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
         try {
             executeSqlWithPrepareStatement(sql, Collections.singletonList(row), rowConverter, false);
         } catch (SQLException upsertException) {

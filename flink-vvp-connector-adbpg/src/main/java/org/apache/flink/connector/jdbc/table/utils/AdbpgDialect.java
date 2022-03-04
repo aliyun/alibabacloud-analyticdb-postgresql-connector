@@ -22,7 +22,9 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Adbpg dialect. */
+/**
+ * Adbpg dialect.
+ */
 public class AdbpgDialect implements Serializable {
 
     private final boolean caseSensitive;
@@ -51,13 +53,13 @@ public class AdbpgDialect implements Serializable {
      * DUPLICATE KEY UPDATE, and PostgresSQL using ON CONFLICT... DO UPDATE SET..
      *
      * @return None if dialect does not support upsert statement, the writer will degrade to the use
-     *     of select + update/insert, this performance is poor.
+     * of select + update/insert, this performance is poor.
      */
     public String getUpsertStatement(
             String tableName,
             String[] fieldNames,
             String[] uniqueKeyFields,
-            String[] UpdateFields) {
+            String[] UpdateFields, boolean support_upsert) {
 
         String uniqueColumns =
                 Arrays.stream(uniqueKeyFields)
@@ -67,15 +69,17 @@ public class AdbpgDialect implements Serializable {
                 Arrays.stream(UpdateFields)
                         .map(f -> quoteIdentifier(f) + "=EXCLUDED." + quoteIdentifier(f))
                         .collect(Collectors.joining(", "));
+        String conflictAction = " ON CONFLICT ("
+                + uniqueColumns
+                + ")"
+                + " DO UPDATE SET "
+                + updateClause;
         return getInsertIntoStatement(tableName, fieldNames)
-                        + " ON CONFLICT ("
-                        + uniqueColumns
-                        + ")"
-                        + " DO UPDATE SET "
-                        + updateClause;
+                + (support_upsert ? conflictAction : "");
     }
 
-    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode) {
+    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode,
+                                   boolean support_upsert) {
         String columns =
                 Arrays.stream(fieldNames)
                         .map(this::quoteIdentifier)
@@ -96,7 +100,7 @@ public class AdbpgDialect implements Serializable {
                 + " FROM "
                 + file
                 + " "
-                + conflictAction;
+                + (support_upsert ? conflictAction : "");
     }
 
     public String getDeleteStatementWithNull(
@@ -118,7 +122,9 @@ public class AdbpgDialect implements Serializable {
                 + conditionClause;
     }
 
-    /** Get insert into statement. */
+    /**
+     * Get insert into statement.
+     */
     public String getInsertIntoStatement(String tableName, String[] fieldNames) {
         String columns =
                 Arrays.stream(fieldNames)
@@ -138,7 +144,9 @@ public class AdbpgDialect implements Serializable {
                 + ")";
     }
 
-    /** Get update statement by unique keys. */
+    /**
+     * Get update statement by unique keys.
+     */
     public String getUpdateStatement(
             String tableName, String[] uniqueKeyFields, String[] updateFields) {
         String setClause =
@@ -176,7 +184,9 @@ public class AdbpgDialect implements Serializable {
                 + conditionClause;
     }
 
-    /** Get select fields statement by condition fields. Default use SELECT. */
+    /**
+     * Get select fields statement by condition fields. Default use SELECT.
+     */
     public String getSelectFromStatement(
             String tableName, String[] selectFields, String[] conditionFields) {
         String selectExpressions =
