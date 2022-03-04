@@ -81,9 +81,9 @@ public class AdbpgOptions {
                     .defaultValue("ignore")
                     .withDescription("Exception Mode");
     public static final ConfigOption<Integer> VERBOSE =
-            ConfigOptions.key("VERBOSE")
+            ConfigOptions.key("verbose")
                     .intType()
-                    .defaultValue(0)
+                    .defaultValue(1)
                     .withDescription("VERBOSE OR NOT");
     //optional sink options
     public static final ConfigOption<Integer> BATCH_SIZE =
