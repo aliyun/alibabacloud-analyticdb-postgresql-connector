@@ -1,4 +1,4 @@
-package org.apache.flink.connector.jdbc.table;
+package org.apache.flink.connector.jdbc.table.sink;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -82,7 +82,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MOD
  * ADBPG sink Implementation.
  * create AdbpgOutputFormat for detail implementation
  */
-public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful {
+public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful,Syncable {
 
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
     private static volatile boolean existsPrimaryKeys = false;
@@ -784,7 +784,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     LOG.error("Thread sleep exception in AdbpgOutputFormat class", e1);
                 }
             } finally {
-                LOG.info("Close connection within execute copy. ");
                 if (rawConn != null) {
                     if (!rawConn.isClosed()) {
                         rawConn.close();
@@ -865,5 +864,12 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             statement = null;
             connection = null;
         }
+    }
+
+    @Override
+    public void waitFinish() throws Exception {
+        LOG.info("waiting existing record finish syncing !");
+        sync();
+        LOG.info("finished waiting");
     }
 }

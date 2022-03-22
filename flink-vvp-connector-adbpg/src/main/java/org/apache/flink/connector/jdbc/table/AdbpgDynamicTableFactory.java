@@ -18,30 +18,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONFLICT_MODE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTION_MAX_ACTIVE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RESERVEMS;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USE_COPY;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.VERBOSE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MODE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.JOINMAXROWS;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CACHESIZE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CACHE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CACHETTLMS;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.validateSource;
-
 /**
  * Table Factory for ADBPG connector.
  * createDynamicTableSink: create ADBPG sink
@@ -81,39 +57,39 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
 
     @Override
     public String factoryIdentifier() {
-        return CONNECTOR_TYPE;
+        return AdbpgOptions.CONNECTOR_TYPE;
     }
 
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
         Set<ConfigOption<?>> requiredOptions = new HashSet<>();
-        requiredOptions.add(URL);
-        requiredOptions.add(TABLE_NAME);
-        requiredOptions.add(USERNAME);
-        requiredOptions.add(PASSWORD);
+        requiredOptions.add(AdbpgOptions.URL);
+        requiredOptions.add(AdbpgOptions.TABLE_NAME);
+        requiredOptions.add(AdbpgOptions.USERNAME);
+        requiredOptions.add(AdbpgOptions.PASSWORD);
         return requiredOptions;
     }
 
     @Override
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> optionalOptions = new HashSet<>();
-        optionalOptions.add(MAX_RETRY_TIMES);
-        optionalOptions.add(BATCH_SIZE);
-        optionalOptions.add(BATCH_WRITE_TIMEOUT_MS);
-        optionalOptions.add(CONNECTION_MAX_ACTIVE);
-        optionalOptions.add(CONFLICT_MODE);
-        optionalOptions.add(USE_COPY);
-        optionalOptions.add(TARGET_SCHEMA);
-        optionalOptions.add(EXCEPTION_MODE);
-        optionalOptions.add(RESERVEMS);
-        optionalOptions.add(CASE_SENSITIVE);
-        optionalOptions.add(WRITE_MODE);
-        optionalOptions.add(RETRY_WAIT_TIME);
-        optionalOptions.add(JOINMAXROWS);
-        optionalOptions.add(CACHE);
-        optionalOptions.add(CACHESIZE);
-        optionalOptions.add(CACHETTLMS);
-        optionalOptions.add(VERBOSE);
+        optionalOptions.add(AdbpgOptions.MAX_RETRY_TIMES);
+        optionalOptions.add(AdbpgOptions.BATCH_SIZE);
+        optionalOptions.add(AdbpgOptions.BATCH_WRITE_TIMEOUT_MS);
+        optionalOptions.add(AdbpgOptions.CONNECTION_MAX_ACTIVE);
+        optionalOptions.add(AdbpgOptions.CONFLICT_MODE);
+        optionalOptions.add(AdbpgOptions.USE_COPY);
+        optionalOptions.add(AdbpgOptions.TARGET_SCHEMA);
+        optionalOptions.add(AdbpgOptions.EXCEPTION_MODE);
+        optionalOptions.add(AdbpgOptions.RESERVEMS);
+        optionalOptions.add(AdbpgOptions.CASE_SENSITIVE);
+        optionalOptions.add(AdbpgOptions.WRITE_MODE);
+        optionalOptions.add(AdbpgOptions.RETRY_WAIT_TIME);
+        optionalOptions.add(AdbpgOptions.JOINMAXROWS);
+        optionalOptions.add(AdbpgOptions.CACHE);
+        optionalOptions.add(AdbpgOptions.CACHESIZE);
+        optionalOptions.add(AdbpgOptions.CACHETTLMS);
+        optionalOptions.add(AdbpgOptions.VERBOSE);
         return optionalOptions;
     }
 
@@ -137,8 +113,8 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
             lts[i] = tableSchema.getFieldDataType(i).get().getLogicalType();
         }
 
-        validateSource(config, tableSchema);
+        AdbpgOptions.validateSource(config, tableSchema);
         LOG.info("Validation passed, adbpg source created successfully.");
-        return new AdbpgDynamicTableSource(fieldNum, fieldNamesStr, lts, config);
+        return new AdbpgDynamicTableSource(fieldNum, fieldNamesStr, lts, config, tableSchema);
     }
 }

@@ -18,12 +18,14 @@
 package org.apache.flink.connector.jdbc.table.utils;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import com.alibaba.druid.pool.DruidDataSource;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.connector.jdbc.internal.options.JdbcReadOptions;
 import org.apache.flink.table.api.TableSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,6 +152,41 @@ public class AdbpgOptions {
 
     public static final ConfigOption<Long> CONNECTION_MAX_WAIT =
             key("connectionMaxWait").longType().defaultValue(15000L);
+
+    // read config options from JDBC connector
+    private static final ConfigOption<String> SCAN_PARTITION_COLUMN =
+            ConfigOptions.key("scan.partition.column")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The column name used for partitioning the input.");
+    private static final ConfigOption<Integer> SCAN_PARTITION_NUM =
+            ConfigOptions.key("scan.partition.num")
+                    .intType()
+                    .noDefaultValue()
+                    .withDescription("The number of partitions.");
+    private static final ConfigOption<Long> SCAN_PARTITION_LOWER_BOUND =
+            ConfigOptions.key("scan.partition.lower-bound")
+                    .longType()
+                    .noDefaultValue()
+                    .withDescription("The smallest value of the first partition.");
+    private static final ConfigOption<Long> SCAN_PARTITION_UPPER_BOUND =
+            ConfigOptions.key("scan.partition.upper-bound")
+                    .longType()
+                    .noDefaultValue()
+                    .withDescription("The largest value of the last partition.");
+    private static final ConfigOption<Integer> SCAN_FETCH_SIZE =
+            ConfigOptions.key("scan.fetch-size")
+                    .intType()
+                    .defaultValue(0)
+                    .withDescription(
+                            "Gives the reader a hint as to the number of rows that should be fetched "
+                                    + "from the database per round-trip when reading. "
+                                    + "If the value is zero, this hint is ignored.");
+    private static final ConfigOption<Boolean> SCAN_AUTO_COMMIT =
+            ConfigOptions.key("scan.auto-commit")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription("Sets whether the driver is in auto-commit mode.");
 
     public static boolean isCaseSensitive(ReadableConfig readableConfig) {
         switch (readableConfig.get(CASE_SENSITIVE).toString().toLowerCase()) {
@@ -324,7 +361,6 @@ public class AdbpgOptions {
         dataSource.setPassword(password);
         dataSource.setDriverClassName(AdbpgOptions.DRIVER_CLASS);
         dataSource.setMaxActive(connectionMaxActive);
-        dataSource.setMaxIdle(connectionMaxActive);
         dataSource.setMaxWait(connectionMaxWait);
         dataSource.setInitialSize(1);
         dataSource.setMinIdle(1);
@@ -454,5 +490,19 @@ public class AdbpgOptions {
         validateIntegerConfigOption(config, CACHESIZE);
         validateIntegerConfigOption(config, CACHETTLMS);
         validateStringEnumConfigOption(config, CACHE, CacheMode.stringList());
+    }
+
+    public static JdbcReadOptions getJdbcReadOptions(ReadableConfig readableConfig) {
+        final Optional<String> partitionColumnName =
+                readableConfig.getOptional(SCAN_PARTITION_COLUMN);
+        final JdbcReadOptions.Builder builder = JdbcReadOptions.builder();
+        if (partitionColumnName.isPresent()) {
+            builder.setPartitionColumnName(partitionColumnName.get());
+            builder.setPartitionLowerBound(readableConfig.get(SCAN_PARTITION_LOWER_BOUND));
+            builder.setPartitionUpperBound(readableConfig.get(SCAN_PARTITION_UPPER_BOUND));
+            builder.setNumPartitions(readableConfig.get(SCAN_PARTITION_NUM));
+        }
+        builder.setAutoCommit(readableConfig.get(SCAN_AUTO_COMMIT));
+        return builder.build();
     }
 }
