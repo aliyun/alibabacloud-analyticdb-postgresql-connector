@@ -1,4 +1,4 @@
-package org.apache.flink.connector.jdbc.table;
+package org.apache.flink.connector.jdbc.table.sourceImpl;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import org.apache.commons.lang3.StringUtils;
@@ -28,9 +28,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTION_MAX_ACTIVE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
@@ -58,9 +56,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
     private String[] fieldNamesStr;
     private LogicalType[] lts;
     private int retryWaitTime;
-    private int batchWriteTimeoutMs;
     private int maxRetryTime;
-    private int connectionMaxActive;
     private String exceptionMode;
     private String targetSchema;
     private boolean caseSensitive;
@@ -98,9 +94,7 @@ public class AdbpgRowDataLookupFunction extends TableFunction<RowData> {
         this.fieldNamesStr = fieldNamesStr;
         this.lts = lts;
         this.retryWaitTime = config.get(RETRY_WAIT_TIME);
-        this.batchWriteTimeoutMs = config.get(BATCH_WRITE_TIMEOUT_MS);
         this.maxRetryTime = config.get(MAX_RETRY_TIMES);
-        this.connectionMaxActive = config.get(CONNECTION_MAX_ACTIVE);
         this.exceptionMode = config.get(EXCEPTION_MODE);
         this.targetSchema = config.get(TARGET_SCHEMA);
         this.caseSensitive = isConfigOptionTrue(config, CASE_SENSITIVE);
