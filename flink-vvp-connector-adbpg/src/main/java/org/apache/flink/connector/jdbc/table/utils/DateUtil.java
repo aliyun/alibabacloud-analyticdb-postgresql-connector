@@ -2,7 +2,6 @@ package org.apache.flink.connector.jdbc.table.utils;
 
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.flink.api.java.tuple.Tuple2;
-
 import javax.annotation.Nonnull;
 import java.sql.Date;
 import java.sql.Time;

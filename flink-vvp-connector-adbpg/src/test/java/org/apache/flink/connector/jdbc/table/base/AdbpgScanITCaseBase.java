@@ -15,8 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.connector.jdbc.table.base;
-import org.apache.flink.table.api.TableEnvironment;
+
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -29,8 +30,6 @@ public class AdbpgScanITCaseBase {
     private static final String ADBPG_URL = "ADBPG_URL";
     private static final String ADBPG_USERNAME = "ADBPG_USERNAME";
     private static final String ADBPG_PASSWORD = "ADBPG_PASSWORD";
-
-
     public String url;
     public String database;
     public String username;
@@ -38,7 +37,6 @@ public class AdbpgScanITCaseBase {
 
     public AdbpgScanITCaseBase() throws IOException {
         Properties properties = new Properties();
-
 
         url = System.getenv(ADBPG_URL);
         database = properties.getProperty("database");

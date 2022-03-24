@@ -22,7 +22,6 @@ import org.apache.flink.connector.jdbc.table.base.JdbcTableSinkITCaseBase;
 import org.apache.flink.connector.jdbc.table.util.AdbpgTestConfParser;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;

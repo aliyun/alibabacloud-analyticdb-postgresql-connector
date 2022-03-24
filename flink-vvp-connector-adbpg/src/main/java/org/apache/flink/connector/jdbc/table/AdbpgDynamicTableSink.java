@@ -2,19 +2,15 @@ package org.apache.flink.connector.jdbc.table;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.ReadableConfig;
-
 import org.apache.flink.connector.jdbc.table.sink.AdbpgOutputFormat;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
-;
 import org.apache.flink.table.connector.sink.OutputFormatProvider;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.types.RowKind;
-
 import java.util.Arrays;
 import java.util.Objects;
-
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;

@@ -28,7 +28,6 @@ import org.apache.flink.table.data.conversion.DataStructureConverters;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
-
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.sql.Date;
@@ -42,9 +41,8 @@ import java.time.ZonedDateTime;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 
-
-/** A simple StringUtil for blink-connectors based on org.apache.commons.lang3.StringUtils. From ververica-connectors */
-public class StringUtils {
+/** yet a simple StringUtil for blink-connectors based on org.apache.commons.lang3.StringUtils. From ververica-connectors */
+public class YaStringUtils {
 
     private static final DataStructureConverter TIME_CONVERTER =
             DataStructureConverters.getConverter(DataTypes.TIME().bridgedTo(Time.class));
@@ -312,5 +310,4 @@ public class StringUtils {
                     String.format("Failed to parse the bytes from the '%s'.", hex), e);
         }
     }
-
 }

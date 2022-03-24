@@ -19,13 +19,11 @@
 package org.apache.flink.connector.jdbc.table;
 
 import org.apache.flink.connector.jdbc.table.base.LegacyJdbcSinkFunctionITCaseBase;
-
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.flink.connector.jdbc.table.util.AdbpgTestConfParser;
 import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -34,7 +32,6 @@ import java.sql.ResultSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
 
 /** Tests the adbpg sink. */

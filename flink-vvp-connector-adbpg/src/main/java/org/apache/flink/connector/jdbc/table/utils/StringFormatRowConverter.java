@@ -23,7 +23,6 @@ import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.TimestampType;
-
 import java.io.Serializable;
 import java.sql.Date;
 import java.sql.Time;

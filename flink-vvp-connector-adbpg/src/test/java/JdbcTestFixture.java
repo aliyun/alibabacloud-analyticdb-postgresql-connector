@@ -20,10 +20,8 @@ import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.utils.TypeConversions;
-
 import java.io.OutputStream;
 import java.io.Serializable;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;

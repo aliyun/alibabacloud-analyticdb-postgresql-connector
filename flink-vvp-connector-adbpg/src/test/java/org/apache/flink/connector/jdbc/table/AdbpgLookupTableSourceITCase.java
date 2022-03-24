@@ -25,14 +25,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
-
 import org.apache.flink.connector.jdbc.table.base.JdbcLookupTableSourceITCaseBase;
 import org.apache.flink.connector.jdbc.table.util.AdbpgTestConfParser;
 import org.apache.flink.connector.jdbc.table.util.JdbcTestUtil;
 import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
 
 /** Itcase for dim join. */
