@@ -18,7 +18,6 @@
 package org.apache.flink.connector.jdbc.table.util;
 
 import org.apache.commons.lang3.StringUtils;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -28,7 +27,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-
 import static org.junit.Assert.assertArrayEquals;
 
 /** Config util. */

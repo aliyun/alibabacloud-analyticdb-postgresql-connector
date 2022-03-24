@@ -113,7 +113,7 @@ public class AdbpgDialect implements Serializable {
                 conditions[i] = quoteIdentifier(conditionFields[i]) + "=?";
             }
         }
-        String conditionClause = StringUtils.join(conditions, " AND ");
+        String conditionClause = YaStringUtils.join(conditions, " AND ");
         return "DELETE FROM "
                 + quoteIdentifier(targetSchema)
                 + "."

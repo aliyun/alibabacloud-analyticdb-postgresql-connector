@@ -34,7 +34,6 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.types.RowKind;
-
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.sql.Timestamp;

@@ -15,8 +15,7 @@ import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.jdbc.table.metric.MetricUtils;
-import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
-import org.apache.flink.connector.jdbc.table.utils.StringUtils;
+import org.apache.flink.connector.jdbc.table.utils.YaStringUtils;
 import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.core.io.InputSplitAssigner;
@@ -31,7 +30,6 @@ import org.postgresql.PGConnection;
 import org.postgresql.copy.PGCopyInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
@@ -50,7 +48,6 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
     private final DataType[] types;
     private ReadableConfig config;
     private transient DruidDataSource dataSource = null;
-
 
     private String queryTemplate;
     private Object[][] parameterValues;
@@ -152,14 +149,14 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
         GenericRowData row = new GenericRowData(returnType.toRowSize());
 
         String[] values = line.split(regexSplitter, -1);
-        LOG.info("get "+values.toString());
+        LOG.info("get " + values.toString());
         assert (row.getArity() == values.length);
 
         for (int i = 0; i < row.getArity(); i++) {
-            if (values[i].equals("\\N")){
+            if (values[i].equals("\\N")) {
                 continue;
             }
-            row.setField(i, StringUtils.convertStringToInternalObject(values[i], types[i]));
+            row.setField(i, YaStringUtils.convertStringToInternalObject(values[i], types[i]));
         }
 
         return row;

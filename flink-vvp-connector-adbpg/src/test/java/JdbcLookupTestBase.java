@@ -19,7 +19,6 @@
 import org.apache.flink.test.util.AbstractTestBase;
 import org.junit.After;
 import org.junit.Before;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;

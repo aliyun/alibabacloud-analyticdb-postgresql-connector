@@ -25,10 +25,8 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 
 /**
@@ -77,7 +75,6 @@ public class OutputFormatSinkFunction<RECORD> extends RichSinkFunction<RECORD>
         return outputFormat;
     }
 
-
     @Override
     public String toString() {
         return getClass().getSimpleName() + ":" + outputFormat.toString();
@@ -98,10 +95,9 @@ public class OutputFormatSinkFunction<RECORD> extends RichSinkFunction<RECORD>
                 try {
                     Thread.sleep(RETRY_INTERVAL);
                 } catch (InterruptedException e1) {
-                    //						throw new RuntimeException(e1);
+                    //throw new RuntimeException(e1);
                 }
             }
-
             long retryingTimeCost = System.currentTimeMillis() - startSyncing;
             if (retryingTimeCost > retryTimeout) {
                 throw new IOException(
@@ -114,6 +110,5 @@ public class OutputFormatSinkFunction<RECORD> extends RichSinkFunction<RECORD>
 
     @Override
     public void initializeState(FunctionInitializationContext functionInitializationContext) throws Exception {
-
     }
 }

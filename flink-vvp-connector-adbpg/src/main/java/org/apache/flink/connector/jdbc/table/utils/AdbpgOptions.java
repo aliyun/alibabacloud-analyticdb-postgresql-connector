@@ -29,7 +29,6 @@ import org.apache.flink.connector.jdbc.internal.options.JdbcReadOptions;
 import org.apache.flink.table.api.TableSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import static org.apache.flink.configuration.ConfigOptions.key;
 
 /**
@@ -399,7 +398,7 @@ public class AdbpgOptions {
             ReadableConfig config, ConfigOption<String> configOption) {
         if (config.getOptional(configOption).isPresent()) {
 
-            if (StringUtils.isEmpty(config.get(configOption)) || config.get(configOption).trim().length() == 0) {
+            if (YaStringUtils.isEmpty(config.get(configOption)) || config.get(configOption).trim().length() == 0) {
                 throw new IllegalArgumentException(
                         String.format(
                                 " option %s should not be null or empty.", configOption.key()));
@@ -413,7 +412,7 @@ public class AdbpgOptions {
             throw new IllegalArgumentException(
                     String.format("Could not find required option: %s", configOption.key()));
         }
-        if (StringUtils.isEmpty(config.get(configOption)) || config.get(configOption).trim().length() == 0) {
+        if (YaStringUtils.isEmpty(config.get(configOption)) || config.get(configOption).trim().length() == 0) {
             throw new IllegalArgumentException(
                     String.format(
                             "Required option %s should not be null or empty.", configOption.key()));

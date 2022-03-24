@@ -59,7 +59,6 @@ import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
@@ -82,7 +81,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MOD
  * ADBPG sink Implementation.
  * create AdbpgOutputFormat for detail implementation
  */
-public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful,Syncable {
+public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful, Syncable {
 
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
     private static volatile boolean existsPrimaryKeys = false;
@@ -610,7 +609,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                             && e.getMessage().indexOf("duplicate key") != -1
                             && e.getMessage().indexOf("violates unique constraint") != -1
                             && "upsert".equalsIgnoreCase(conflictMode))
-            )) {
+                )) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -739,7 +738,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
         long end = System.currentTimeMillis();
         reportMetric(valueList, start, end, valueList.size() * sql.length() * 2);
-        LOG.debug("%s operation succeed on %d records ", del == false ? "Delete" : "Write", valueList.size());
+        LOG.debug("%s operation succeed on %d records ", !del ? "Delete" : "Write", valueList.size());
     }
 
     private long executeCopy(byte[] data) throws SQLException, IOException {

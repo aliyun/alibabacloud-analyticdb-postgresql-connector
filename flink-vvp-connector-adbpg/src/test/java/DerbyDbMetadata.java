@@ -16,7 +16,6 @@
  */
 
 import org.apache.derby.jdbc.EmbeddedXADataSource;
-
 import javax.sql.XADataSource;
 
 /**
