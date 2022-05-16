@@ -317,23 +317,22 @@ public class JdbcSinkTestTableSourceFactory implements DynamicTableSourceFactory
     }
 
     private static TestTableSourceConfig createConfiguration(Map<String, String> options) {
-        Configuration readConfig = Configuration.fromMap(options);
 
         TestTableSourceConfig testTableSourceConfig = new TestTableSourceConfig();
-        testTableSourceConfig.numInsert = readConfig.get(NUM_INSERT);
-        testTableSourceConfig.numDelete = readConfig.get(NUM_DELETE);
-        testTableSourceConfig.numUpdateAfter = readConfig.get(NUM_UPDATE);
-        testTableSourceConfig.insertStartKeyIndex = readConfig.get(INSERT_START_KEY);
-        testTableSourceConfig.insertStartValue = readConfig.get(INSERT_START_VALUE);
-        testTableSourceConfig.deleteStartKeyIndex = readConfig.get(DELETE_START_KEY);
-        testTableSourceConfig.deleteStartValue = readConfig.get(DELETE_START_VALUE);
-        testTableSourceConfig.updateStartKeyIndex = readConfig.get(UPDATE_START_KEY);
-        testTableSourceConfig.updateStartValue = readConfig.get(UPDATE_START_VALUE);
+        testTableSourceConfig.numInsert = Integer.valueOf(options.get(NUM_INSERT.key()));
+        testTableSourceConfig.numDelete = Integer.valueOf(options.get(NUM_DELETE.key()));
+        testTableSourceConfig.numUpdateAfter = Integer.valueOf(options.get(NUM_UPDATE.key()));
+        testTableSourceConfig.insertStartKeyIndex = Integer.valueOf(options.get(INSERT_START_KEY.key()));
+        testTableSourceConfig.insertStartValue = Integer.valueOf(options.get(INSERT_START_VALUE.key()));
+        testTableSourceConfig.deleteStartKeyIndex = Integer.valueOf(options.get(DELETE_START_KEY.key()));
+        testTableSourceConfig.deleteStartValue = Integer.valueOf(options.get(DELETE_START_VALUE.key()));
+        testTableSourceConfig.updateStartKeyIndex = Integer.valueOf(options.get(UPDATE_START_KEY.key()));
+        testTableSourceConfig.updateStartValue = Integer.valueOf(options.get(UPDATE_START_VALUE.key()));
         testTableSourceConfig.fieldTypes =
-                Arrays.stream(readConfig.get(FIELD_TYPES).split(","))
+                Arrays.stream(options.get(FIELD_TYPES.key()).split(","))
                         .map(LogicalTypeRoot::valueOf)
                         .collect(Collectors.toList());
-        testTableSourceConfig.markEvenAsNull = readConfig.get(MARK_EVEN_AS_NULL);
+        testTableSourceConfig.markEvenAsNull = Boolean.valueOf(options.get(MARK_EVEN_AS_NULL.key()));
 
         return testTableSourceConfig;
     }

@@ -45,17 +45,6 @@ public final class JdbcTypeUtil {
         return (String) SQL_TYPE_NAMES.get(typeInformationToSqlType(type));
     }
 
-    public static TableSchema normalizeTableSchema(TableSchema schema) {
-        Builder physicalSchemaBuilder = TableSchema.builder();
-        schema.getTableColumns().forEach((c) -> {
-            if (c.isPhysical()) {
-                DataType type = DataTypeUtils.transform(c.getType(), new TypeTransformation[]{TypeTransformations.timeToSqlTypes()});
-                physicalSchemaBuilder.field(c.getName(), type);
-            }
-        });
-        return physicalSchemaBuilder.build();
-    }
-
     static {
         HashMap<TypeInformation<?>, Integer> m = new HashMap();
         m.put(BasicTypeInfo.STRING_TYPE_INFO, 12);

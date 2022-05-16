@@ -17,7 +17,6 @@ import org.apache.flink.table.connector.source.InputFormatProvider;
 import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.TableFunctionProvider;
-import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -31,8 +30,7 @@ import java.util.List;
  * parse look up keys and
  * create AdbpgRowDataLookupFunction for detail implementation
  */
-public class AdbpgDynamicTableSource implements LookupTableSource, ScanTableSource, SupportsProjectionPushDown,
-        SupportsLimitPushDown {
+public class AdbpgDynamicTableSource implements LookupTableSource, ScanTableSource, SupportsProjectionPushDown{
     private int fieldNum;
     private String[] fieldNamesStr;
     private LogicalType[] lts;
@@ -128,11 +126,6 @@ public class AdbpgDynamicTableSource implements LookupTableSource, ScanTableSour
                 tableSchema, parameterValues, query);
 
         return InputFormatProvider.of(inputFunction);
-    }
-
-    @Override
-    public void applyLimit(long limit) {
-        this.limit = limit;
     }
 
     @Override

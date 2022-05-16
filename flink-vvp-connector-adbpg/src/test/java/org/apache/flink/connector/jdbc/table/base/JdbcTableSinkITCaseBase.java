@@ -167,7 +167,7 @@ public abstract class JdbcTableSinkITCaseBase {
                         "INSERT INTO upsertSink SELECT id, num, text FROM T WHERE num IN (4, 5)");
 
         // wait to finish
-        tableResult.getJobClient().get().getJobExecutionResult().get();
+        tableResult.getJobClient().get().getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
 
         String[] expectRows = new String[] {"10,4,Comment#10", "15,5,Comment#15"};
 
@@ -223,7 +223,7 @@ public abstract class JdbcTableSinkITCaseBase {
                         "INSERT INTO appendSink SELECT id, num, text FROM T WHERE num IN (4, 5)");
 
         // wait to finish
-        tableResult.getJobClient().get().getJobExecutionResult().get();
+        tableResult.getJobClient().get().getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
 
         String[] expectRows =
                 new String[] {

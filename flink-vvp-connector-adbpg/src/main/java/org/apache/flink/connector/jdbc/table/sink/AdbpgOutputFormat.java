@@ -30,7 +30,6 @@ import org.apache.flink.api.common.io.CleanupWhenUnsuccessful;
 import org.apache.flink.api.common.io.RichOutputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.connector.jdbc.table.metric.MetricUtils;
 import org.apache.flink.connector.jdbc.table.metric.SimpleGauge;
 import org.apache.flink.connector.jdbc.table.utils.AdbpgDialect;
 import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
@@ -59,6 +58,7 @@ import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
@@ -135,6 +135,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     // datasource
     private transient DruidDataSource dataSource = null;
     private transient ScheduledExecutorService executorService;
+    private transient DruidPooledConnection rawConn;
+    private transient BaseConnection baseConn;
+    private transient CopyManager copyManager;
     private transient Connection connection;
     private transient Statement statement;
     private JdbcRowConverter pkConverter = null;
@@ -180,7 +183,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.retryWaitTime = config.get(RETRY_WAIT_TIME);
         this.fieldNum = fieldNum;
         this.lts = lts;
-        this.rowDataSerializer = new RowDataSerializer(this.lts);
+        this.rowDataSerializer = new RowDataSerializer(null, this.lts);
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
         this.fieldNamesStr = fieldNamesStr;
         this.fieldNames = joinerOnComma.join(fieldNamesStr);
@@ -291,7 +294,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private long getVersion() {
         long res = 0;
         try {
-            connection = dataSource.getConnection();
             statement = connection.createStatement();
             ResultSet rs = statement.executeQuery("show adbpg_version ;");
             if (rs.next()) {
@@ -308,7 +310,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         boolean res = false;
         try {
             String sql = String.format("select count(*) from pg_inherits where inhparent::regclass='%s'::regclass", tableName);
-            connection = dataSource.getConnection();
             statement = connection.createStatement();
             ResultSet rs = statement.executeQuery(sql);
             if (rs.next()) {
@@ -330,12 +331,16 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             if (getVersion() < adbpg_version && checkPartition()) {
                 support_upsert = false;
             }
+            closeConnection();
+            rawConn = dataSource.getConnection();
+            baseConn = (BaseConnection) (rawConn.getConnection());
+            copyManager = new CopyManager(baseConn);
         } catch (SQLException e) {
             LOG.error("Init DataSource Or Get Connection Error!", e);
             throw new IOException("cannot get connection for url: " + url + ", userName: " + userName + ", password: " + password, e);
         }
 
-        executorService = new ScheduledThreadPoolExecutor(1,
+         executorService = new ScheduledThreadPoolExecutor(1,
                 new BasicThreadFactory.Builder().namingPattern("adbpg-flusher-%d").daemon(true).build());
         executorService.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -350,11 +355,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             }
         }, batchWriteTimeout, batchWriteTimeout, TimeUnit.MILLISECONDS);
 
-        outTps = MetricUtils.registerNumRecordsOutRate(getRuntimeContext());
-        outBps = MetricUtils.registerNumBytesOutRate(getRuntimeContext(), CONNECTOR_TYPE);
-        latencyGauge = MetricUtils.registerCurrentSendTime(getRuntimeContext());
-        sinkSkipCounter = MetricUtils.registerNumRecordsOutErrors(getRuntimeContext());
-        deleteCounter = MetricUtils.registerSinkDeleteCounter(getRuntimeContext());
     }
 
     @Override
@@ -428,6 +428,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     public void close() throws IOException {
         sync();
         LOG.info("close datasource");
+        closeConnection();
+        closeCopyConnection();
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();
             dataSource = null;
@@ -587,7 +589,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 byte[] data = stringBuilder.toString().getBytes(Charsets.UTF_8);
                 bps = executeCopy(data);
                 long end = System.currentTimeMillis();
-                reportMetric(rows, start, end, bps);
+//                reportMetric(rows, start, end, bps);
             } else if (writeMode == 2) {
                 String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
                 executeSqlWithPrepareStatement(sql, rows, rowConverter, false);
@@ -609,7 +611,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                             && e.getMessage().indexOf("duplicate key") != -1
                             && e.getMessage().indexOf("violates unique constraint") != -1
                             && "upsert".equalsIgnoreCase(conflictMode))
-                )) {
+            )) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -678,7 +680,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 }
             }
         }
-        closeConnection();
+//        closeConnection();
     }
 
     private void executeSqlWithPrepareStatement(
@@ -737,7 +739,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
 
         long end = System.currentTimeMillis();
-        reportMetric(valueList, start, end, valueList.size() * sql.length() * 2);
+//        reportMetric(valueList, start, end, valueList.size() * sql.length() * 2);
         LOG.debug("%s operation succeed on %d records ", !del ? "Delete" : "Write", valueList.size());
     }
 
@@ -750,16 +752,21 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         inputStream.mark(0);
         int retryTime = 0;
         while (retryTime++ < maxRetryTime) {
-            BaseConnection baseConn = null;
-            DruidPooledConnection rawConn = null;
+
             try {
                 inputStream.reset();
                 inputStream.mark(0);
-                rawConn = dataSource.getConnection();
-                baseConn = (BaseConnection) (rawConn.getConnection());
-                CopyManager manager = new CopyManager(baseConn);
+                if (baseConn == null) {
+                    LOG.info("recreate baseConn within executeCopy");
+                    DruidPooledConnection rawConn = dataSource.getConnection();
+                    baseConn = (BaseConnection) (rawConn.getConnection());
+                }
+                if (copyManager == null) {
+                    LOG.info("recreate copyManager within executeCopy");
+                    copyManager = new CopyManager(baseConn);
+                }
                 String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN", conflictMode, support_upsert);
-                manager.copyIn(sql, inputStream);
+                copyManager.copyIn(sql, inputStream);
                 break;
             } catch (SQLException e) {
                 if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1
@@ -782,22 +789,22 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 } catch (Exception e1) {
                     LOG.error("Thread sleep exception in AdbpgOutputFormat class", e1);
                 }
-            } finally {
-                if (rawConn != null) {
-                    if (!rawConn.isClosed()) {
-                        rawConn.close();
-                    }
-                    if (dataSource != null) {
-                        dataSource.discardConnection(rawConn);
-                    }
-                }
-                // We should close and discard druid connection firstly, then close base connection.
-                // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
-                if (baseConn != null) {
-                    if (!baseConn.isClosed()) {
-                        baseConn.close();
-                    }
-                }
+//            } finally {
+//                if (rawConn != null) {
+//                    if (!rawConn.isClosed()) {
+//                        rawConn.close();
+//                    }
+//                    if (dataSource != null) {
+//                        dataSource.discardConnection(rawConn);
+//                    }
+//                }
+//                // We should close and discard druid connection firstly, then close base connection.
+//                // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
+//                if (baseConn != null) {
+//                    if (!baseConn.isClosed()) {
+//                        baseConn.close();
+//                    }
+//                }
             }
         }
         return bps * retryTime;
@@ -852,18 +859,47 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             if (connection != null) {
                 if (!connection.isClosed()) {
                     connection.close();
-                    dataSource.discardConnection(connection);
+//                    dataSource.discardConnection(connection);
                     LOG.info("connection closed and discarded ");
                 }
                 connection = null;
             }
         } catch (SQLException e) {
+            LOG.error("error during closeConnection");
             throw new RuntimeException(e);
         } finally {
             statement = null;
             connection = null;
         }
     }
+
+    private void closeCopyConnection() {
+        try {
+            LOG.info("Close copy connection ");
+            if (rawConn != null) {
+                if (!rawConn.isClosed()) {
+                    rawConn.close();
+                }
+                if (dataSource != null) {
+                    dataSource.discardConnection(rawConn);
+                }
+            }
+            // We should close and discard druid connection firstly, then close base connection.
+            // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
+            if (baseConn != null) {
+                if (!baseConn.isClosed()) {
+                    baseConn.close();
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("error during closeCopyConnection");
+            throw new RuntimeException(e);
+        } finally {
+            rawConn = null;
+            baseConn = null;
+        }
+    }
+
 
     @Override
     public void waitFinish() throws Exception {

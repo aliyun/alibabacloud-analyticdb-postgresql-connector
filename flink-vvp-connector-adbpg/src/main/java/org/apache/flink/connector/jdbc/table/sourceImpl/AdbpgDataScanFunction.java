@@ -14,16 +14,14 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.connector.jdbc.table.metric.MetricUtils;
 import org.apache.flink.connector.jdbc.table.utils.YaStringUtils;
 import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.core.io.InputSplitAssigner;
-import org.apache.flink.metrics.Meter;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
+import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.postgresql.PGConnection;
@@ -44,7 +42,7 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
     private final String username;
     private final String password;
     private final String regexSplitter;
-    private final InternalTypeInfo returnType;
+    private final RowDataTypeInfo returnType;
     private final DataType[] types;
     private ReadableConfig config;
     private transient DruidDataSource dataSource = null;
@@ -57,8 +55,18 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
     private transient BufferedReader reader;
     private transient String line;
     private transient InputStreamReader streamReader;
-    private transient Meter sourceInTps;
     private transient PGCopyInputStream in;
+
+    private static RowDataTypeInfo deriveRowType(TableSchema tableSchema) {
+        int columnsNum = tableSchema.getFieldCount();
+        String[] fieldNames = new String[columnsNum];
+        LogicalType[] fieldTypes = new LogicalType[columnsNum];
+        for (int idx = 0; idx < columnsNum; idx++) {
+            fieldNames[idx] = tableSchema.getFieldNames()[idx];
+            fieldTypes[idx] = tableSchema.getFieldDataType(fieldNames[idx]).get().getLogicalType();
+        }
+        return new RowDataTypeInfo(fieldTypes, fieldNames);
+    }
 
     public AdbpgDataScanFunction(int fieldNum,
                                  String[] fieldNamesStr, LogicalType[] lts, ReadableConfig config, TableSchema schema,
@@ -66,7 +74,7 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
         this.parameterValues = parameterValues;
         this.config = config;
         this.regexSplitter = "\\" + "\u0002";
-        this.returnType = InternalTypeInfo.of(schema.toRowDataType().getLogicalType());
+        this.returnType = deriveRowType(schema);
         this.queryTemplate = query;
         this.types = schema.getFieldDataTypes();
         this.url = config.get(URL);
@@ -104,7 +112,6 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
 
     @Override
     public void open(InputSplit inputSplit) throws IOException {
-        sourceInTps = MetricUtils.registerNumRecordsInRate(getRuntimeContext());
         try {
             if (inputSplit != null && parameterValues != null) {
                 int pl = parameterValues[inputSplit.getSplitNumber()].length;
@@ -144,9 +151,8 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
 
     @Override
     public RowData nextRecord(RowData rowData) throws IOException {
-        sourceInTps.markEvent();
 
-        GenericRowData row = new GenericRowData(returnType.toRowSize());
+        GenericRowData row = new GenericRowData(returnType.getArity());
 
         String[] values = line.split(regexSplitter, -1);
         LOG.info("get " + values.toString());
