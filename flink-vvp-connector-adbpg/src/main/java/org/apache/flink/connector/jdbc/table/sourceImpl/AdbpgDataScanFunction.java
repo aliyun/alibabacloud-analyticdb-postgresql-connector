@@ -135,7 +135,7 @@ public class AdbpgDataScanFunction extends RichInputFormat<RowData, InputSplit>
             Class.forName(driverClassName).newInstance();
             connection = DriverManager.getConnection(url, username, password);
             in = new PGCopyInputStream((PGConnection) connection, query);
-            streamReader = new InputStreamReader(in);
+            streamReader = new InputStreamReader(in,"UTF-8");
             reader = new BufferedReader(streamReader);
         } catch (Exception se) {
             throw new IllegalArgumentException("open() failed." + se.getMessage(), se);

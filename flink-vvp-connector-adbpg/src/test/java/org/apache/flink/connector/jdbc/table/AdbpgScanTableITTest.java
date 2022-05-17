@@ -28,8 +28,8 @@ public class AdbpgScanTableITTest extends AdbpgScanITCaseBase {
     // 16:28:07.737+08 | 8.58965 | {8589934592,8589934593,8589934594} |   |
     // {8.58967,96.4667,9345.16} | {587897.4646746,792343.646446,76.46464} |
     // {monday,saturday,sunday} | {464,98661,32489} | {t,t,f,t}
-    private static final String INSERT_SQL = " insert into TABLE_NAME values  (1,'dim',20.2007,'f',652482,"
-            + "'2020-07-08','source_test',timestamp '2020-07-10 16:28:07.737+08',8.58965,'{8589934592,8589934593,8589934594}',null,"
+    private static final String INSERT_SQL = " insert into TABLE_NAME values  (1,'我是',20.2007,'f',652482,"
+            + "'2020-07-08','你是2',timestamp '2020-07-10 16:28:07.737+08',8.58965,'{8589934592,8589934593,8589934594}',null,"
             +
             "'{8.589667,96.46667,9345.164}','{587897.4646746,792343.646446,76.46464}','{monday,saturday,sunday}','{464,98661,32489}','{t,t,f,t}',8119.23,'t')";
     private static final String CREATE_SCAN_SOURCE = " create table TABLE_NAME  \n"
@@ -52,7 +52,7 @@ public class AdbpgScanTableITTest extends AdbpgScanITCaseBase {
             + "r Decimal(6,2), \n"
             + "s boolean );";
     private static final String TEST_TABLE_NAME =
-            "dynamic_scan_" + RandomStringUtils.randomAlphabetic(16).toLowerCase();
+            "dynamic_scan_1" + RandomStringUtils.randomAlphabetic(16).toLowerCase();
     protected EnvironmentSettings streamSettings;
     protected StreamExecutionEnvironment env;
     protected StreamTableEnvironment tEnv;
@@ -134,12 +134,12 @@ public class AdbpgScanTableITTest extends AdbpgScanITCaseBase {
                 new Object[]{
                         Row.of(
                                 1,
-                                "dim",
+                                "我是",
                                 20.2007,
                                 false,
                                 652482L,
                                 LocalDate.of(2020, 7, 8),
-                                "source_test",
+                                "你是2",
                                 LocalDateTime.of(
                                         LocalDate.of(2020, 07, 10), LocalTime.of(16, 28, 7, 737000000)),
                                 8.58965f,
