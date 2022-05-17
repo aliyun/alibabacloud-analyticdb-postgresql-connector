@@ -361,10 +361,9 @@ public class AdbpgOptions {
         dataSource.setDriverClassName(AdbpgOptions.DRIVER_CLASS);
         dataSource.setMaxActive(connectionMaxActive);
         dataSource.setMaxWait(connectionMaxWait);
-        dataSource.setInitialSize(1);
-        dataSource.setMinIdle(1);
+        dataSource.setInitialSize(0);
         dataSource.setPoolPreparedStatements(false);
-        dataSource.setValidationQuery("select 1");
+        dataSource.setValidationQuery("select 'adbpg_flink_connector'");
         dataSource.setTestWhileIdle(true);
         dataSource.setTestOnBorrow(false);
         dataSource.setTestOnReturn(false);
