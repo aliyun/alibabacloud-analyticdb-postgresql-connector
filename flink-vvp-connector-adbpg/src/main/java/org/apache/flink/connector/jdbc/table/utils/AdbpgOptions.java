@@ -37,7 +37,7 @@ import static org.apache.flink.configuration.ConfigOptions.key;
 public class AdbpgOptions {
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOptions.class);
 
-    public static final String CONNECTOR_TYPE = "adbpg-nightly-1.11";
+    public static final String CONNECTOR_TYPE = "adbpg-nightly-1.13";
     public static final String DRIVER_CLASS = "org.postgresql.Driver";
 
     public static final ConfigOption<String> URL =
@@ -361,10 +361,9 @@ public class AdbpgOptions {
         dataSource.setDriverClassName(AdbpgOptions.DRIVER_CLASS);
         dataSource.setMaxActive(connectionMaxActive);
         dataSource.setMaxWait(connectionMaxWait);
-        dataSource.setInitialSize(1);
-        dataSource.setMinIdle(1);
+        dataSource.setInitialSize(0);
         dataSource.setPoolPreparedStatements(false);
-        dataSource.setValidationQuery("select 1");
+        dataSource.setValidationQuery("select 'adbpg_flink_connector'");
         dataSource.setTestWhileIdle(true);
         dataSource.setTestOnBorrow(false);
         dataSource.setTestOnReturn(false);
@@ -501,7 +500,6 @@ public class AdbpgOptions {
             builder.setPartitionUpperBound(readableConfig.get(SCAN_PARTITION_UPPER_BOUND));
             builder.setNumPartitions(readableConfig.get(SCAN_PARTITION_NUM));
         }
-//        builder.setAutoCommit(readableConfig.get(SCAN_AUTO_COMMIT));
         return builder.build();
     }
 }
