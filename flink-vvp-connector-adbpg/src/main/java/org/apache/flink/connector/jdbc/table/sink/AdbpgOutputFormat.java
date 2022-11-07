@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.druid.pool.DruidPooledConnection;
 import org.apache.commons.io.Charsets;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.flink.api.common.io.CleanupWhenUnsuccessful;
 import org.apache.flink.api.common.io.RichOutputFormat;
@@ -39,7 +40,7 @@ import org.apache.flink.connector.jdbc.table.utils.JdbcRowConverter;
 import org.apache.flink.connector.jdbc.table.utils.StringFormatRowConverter;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Meter;
-import org.apache.flink.shaded.guava18.com.google.common.base.Joiner;
+import org.apache.flink.shaded.guava30.com.google.common.base.Joiner;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
@@ -299,6 +300,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             ResultSet rs = statement.executeQuery("show adbpg_version ;");
             if (rs.next()) {
                 String versionStr = rs.getString("adbpg_version");
+                if(StringUtils.isBlank(versionStr)) {
+                    return res;
+                }
                 res = Long.parseLong(versionStr.replaceAll("\\.", ""));
             }
         } catch (SQLException e) {

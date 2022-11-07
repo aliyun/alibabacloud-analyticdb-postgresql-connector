@@ -26,7 +26,7 @@ import org.apache.flink.metrics.MeterView;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.SimpleCounter;
-import org.apache.flink.runtime.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.runtime.metrics.groups.InternalOperatorMetricGroup;
 import org.apache.flink.table.functions.FunctionContext;
 
 /**
@@ -64,9 +64,9 @@ public class MetricUtils {
 
     public static Meter registerNumRecordsInRate(MetricGroup metricGroup) {
         final Meter numRecordsInRateMeter =
-                ((OperatorMetricGroup) metricGroup).getIOMetricGroup().getNumRecordsInRateMeter();
+                ((InternalOperatorMetricGroup) metricGroup).getIOMetricGroup().getNumRecordsInRateMeter();
         final Counter numRecordsInCounter =
-                ((OperatorMetricGroup) metricGroup).getIOMetricGroup().getNumRecordsInCounter();
+                ((InternalOperatorMetricGroup) metricGroup).getIOMetricGroup().getNumRecordsInCounter();
 
         final MetricGroup sourceMetricGroup = metricGroup.addGroup(SOURCE_METRIC_GROUP);
         sourceMetricGroup.counter(SourceMetricNames.NUM_RECORDS_IN, numRecordsInCounter);
@@ -123,11 +123,11 @@ public class MetricUtils {
 
     public static Meter registerNumRecordsOutRate(RuntimeContext context) {
         final Meter numRecordsOutRate =
-                ((OperatorMetricGroup) context.getMetricGroup())
+                ((InternalOperatorMetricGroup) context.getMetricGroup())
                         .getIOMetricGroup()
                         .getNumRecordsOutRate();
         final Counter numRecordsOutCounter =
-                ((OperatorMetricGroup) context.getMetricGroup())
+                ((InternalOperatorMetricGroup) context.getMetricGroup())
                         .getIOMetricGroup()
                         .getNumRecordsOutCounter();
         context.getMetricGroup()
@@ -140,7 +140,7 @@ public class MetricUtils {
     }
 
     public static Meter registerNumRecordsOutRate(Sink.InitContext context) {
-        return ((OperatorMetricGroup) context.metricGroup())
+        return ((InternalOperatorMetricGroup) context.metricGroup())
                 .getIOMetricGroup()
                 .getNumRecordsOutRate();
     }
