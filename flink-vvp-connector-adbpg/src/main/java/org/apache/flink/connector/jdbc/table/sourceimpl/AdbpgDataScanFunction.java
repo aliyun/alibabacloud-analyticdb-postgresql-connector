@@ -1,4 +1,4 @@
-package org.apache.flink.connector.jdbc.table.sourceImpl;
+package org.apache.flink.connector.jdbc.table.sourceimpl;
 
 import java.io.BufferedReader;
 import java.io.IOException;
