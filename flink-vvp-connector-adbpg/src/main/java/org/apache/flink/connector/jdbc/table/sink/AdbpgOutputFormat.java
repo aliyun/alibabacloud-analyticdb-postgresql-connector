@@ -585,7 +585,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
         try {
             long start = System.currentTimeMillis();
-            if (writeMode == 1) {
+            if (writeMode == 1) {                   /** copy, default value */
                 StringBuilder stringBuilder = new StringBuilder();
                 for (RowData row : rows) {
                     String[] fields = copyModeRowConverter.convertToString(row);
@@ -598,11 +598,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 bps = executeCopy(data);
                 long end = System.currentTimeMillis();
                 reportMetric(rows, start, end, bps);
-            } else if (writeMode == 2) {
+            } else if (writeMode == 2) {            /** batch upsert */
                 String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
                 executeSqlWithPrepareStatement(sql, rows, rowConverter, false);
-            } else {
-                // write mode = 0
+            } else {                                /** batch insert, writeMode=0 */
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStr);
                 executeSqlWithPrepareStatement(insertSql, rows, rowConverter, false);
             }
@@ -614,10 +613,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             if (e instanceof BatchUpdateException) {
                 e = ((BatchUpdateException) e).getNextException();
             }
-            if (existsPrimaryKeys
+            if (existsPrimaryKeys                   /** conflictMode = 'upsert', use insert on conflict */
                     && (writeMode == 2 || (e.getMessage() != null
-                            && e.getMessage().indexOf("duplicate key") != -1
-                            && e.getMessage().indexOf("violates unique constraint") != -1
+                            && e.getMessage().contains("duplicate key")
+                            && e.getMessage().contains("violates unique constraint")
                             && "upsert".equalsIgnoreCase(conflictMode)))) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
@@ -629,7 +628,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 closeConnection();
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStr);
                 for (RowData row : rows) {
-                    // try to insert record on by one
+                    // TODO refactor here, try insert first is not necessary, use update/upsert/report error directly
+                    // try to insert record on by one first
                     try {
                         executeSqlWithPrepareStatement(insertSql, Collections.singletonList(row), rowConverter, false);
                     } catch (SQLException insertException) {
@@ -640,14 +640,14 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                         }
                         if (existsPrimaryKeys
                                 && insertException.getMessage() != null
-                                && insertException.getMessage().indexOf("duplicate key") != -1
-                                && insertException.getMessage().indexOf("violates unique constraint") != -1) {
-                            if ("strict".equalsIgnoreCase(conflictMode)) {
+                                && insertException.getMessage().contains("duplicate key")
+                                && insertException.getMessage().contains("violates unique constraint")) {
+                            if ("strict".equalsIgnoreCase(conflictMode)) {                              // conflictMode = 'strict', report error
                                 throw new RuntimeException("duplicate key value violates unique constraint");
-                            } else if ("update".equalsIgnoreCase(conflictMode)) {
+                            } else if ("update".equalsIgnoreCase(conflictMode)) {                       // conflictMode = 'update', use update sql
                                 LOG.warn("Insert failed, try to update record");
                                 updateRow(row);
-                            } else if ("upsert".equalsIgnoreCase(conflictMode) || (2 == writeMode)) {
+                            } else if ("upsert".equalsIgnoreCase(conflictMode) || (2 == writeMode)) {   // conflictMode = 'upsert', use upsert sql
                                 LOG.warn("Insert failed, try to upsert record");
                                 upsertRow(row);
                             }
@@ -708,20 +708,21 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 preparedStatement.executeBatch();
                 break;
             } catch (SQLException exception) {
-                if (exception instanceof BatchUpdateException) {
-                    exception = ((BatchUpdateException) exception).getNextException();
+                SQLException throwables = exception;
+                if (throwables instanceof BatchUpdateException) {
+                    throwables = ((BatchUpdateException) throwables).getNextException();
                 }
                 LOG.error(
                         String.format(
                                 "Execute sql error, sql: %s, retryTimes: %d", sql, retryTime),
-                        exception);
+                        throwables);
                 if (retryTime == maxRetryTime) {
                     if ("strict".equalsIgnoreCase(exceptionMode)) {
-                        throw exception;
+                        throw throwables;
                     } else {
                         LOG.warn(
                                 "Ignore exception {} when execute sql {}",
-                                exception,
+                                throwables,
                                 sql);
                         sinkSkipCounter.inc();
                     }
@@ -744,16 +745,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
 
         long end = System.currentTimeMillis();
-        reportMetric(valueList, start, end, valueList.size() * sql.length() * 2);
+        reportMetric(valueList, start, end, (long) valueList.size() * sql.length() * 2);
         LOG.debug("%s operation succeed on %d records ", !del ? "Delete" : "Write", valueList.size());
     }
 
     private long executeCopy(byte[] data) throws SQLException, IOException {
         long bps = data.length;
         InputStream inputStream = new ByteArrayInputStream(data);
-        if (inputStream == null) {
-            return 0;
-        }
         inputStream.mark(0);
         int retryTime = 0;
         while (retryTime++ < maxRetryTime) {
@@ -773,20 +771,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN", conflictMode, support_upsert);
                 copyManager.copyIn(sql, inputStream);
                 break;
-            } catch (SQLException e) {
-                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1
-                        && e.getMessage().indexOf("violates unique constraint") != -1)
+            } catch (SQLException | IOException e) {
+                if ((e.getMessage() != null && e.getMessage().contains("duplicate key")
+                        && e.getMessage().contains("violates unique constraint"))
                         || retryTime >= maxRetryTime - 1) {
-                    throw e;
-                }
-                try {
-                    Thread.sleep(retryWaitTime);
-                } catch (Exception e1) {
-                    LOG.error("Thread sleep exception in AdbpgOutputFormat class", e1);
-                }
-            } catch (IOException e) {
-                if ((e.getMessage() != null && e.getMessage().indexOf("duplicate key") != -1
-                        && e.getMessage().indexOf("violates unique constraint") != -1) || retryTime >= maxRetryTime - 1) {
                     throw e;
                 }
                 try {
