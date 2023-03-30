@@ -1,4 +1,4 @@
-package org.apache.flink.connector.jdbc.table.sourceImpl;
+package org.apache.flink.connector.jdbc.table.sourceimpl;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import org.apache.commons.lang3.StringUtils;

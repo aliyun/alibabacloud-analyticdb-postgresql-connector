@@ -60,7 +60,6 @@ import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
@@ -300,7 +299,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             ResultSet rs = statement.executeQuery("show adbpg_version ;");
             if (rs.next()) {
                 String versionStr = rs.getString("adbpg_version");
-                if(StringUtils.isBlank(versionStr)) {
+                if (StringUtils.isBlank(versionStr)) {
                     return res;
                 }
                 res = Long.parseLong(versionStr.replaceAll("\\.", ""));
@@ -344,7 +343,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             throw new IOException("cannot get connection for url: " + url + ", userName: " + userName + ", password: " + password, e);
         }
 
-         executorService = new ScheduledThreadPoolExecutor(1,
+        executorService = new ScheduledThreadPoolExecutor(1,
                 new BasicThreadFactory.Builder().namingPattern("adbpg-flusher-%d").daemon(true).build());
         executorService.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -616,12 +615,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 e = ((BatchUpdateException) e).getNextException();
             }
             if (existsPrimaryKeys
-                    && (writeMode == 2 || (
-                    e.getMessage() != null
+                    && (writeMode == 2 || (e.getMessage() != null
                             && e.getMessage().indexOf("duplicate key") != -1
                             && e.getMessage().indexOf("violates unique constraint") != -1
-                            && "upsert".equalsIgnoreCase(conflictMode))
-            )) {
+                            && "upsert".equalsIgnoreCase(conflictMode)))) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -890,7 +887,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             baseConn = null;
         }
     }
-
 
     @Override
     public void waitFinish() throws Exception {
