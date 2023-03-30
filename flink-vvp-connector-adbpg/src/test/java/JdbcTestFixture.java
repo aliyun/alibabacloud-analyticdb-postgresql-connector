@@ -73,10 +73,10 @@ public class JdbcTestFixture {
     @SuppressWarnings("unused") // used in string constant in prepareDatabase
     public static final OutputStream DEV_NULL =
             new OutputStream() {
-        @Override
+                @Override
                 public void write(int b) {
-        }
-    };
+                }
+            };
     private static final String EBOOKSHOP_SCHEMA_NAME = "ebookshop";
     public static final DerbyDbMetadata DERBY_EBOOKSHOP_DB =
             new DerbyDbMetadata(EBOOKSHOP_SCHEMA_NAME);

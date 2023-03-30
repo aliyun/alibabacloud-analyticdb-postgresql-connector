@@ -181,8 +181,7 @@ public class JdbcRowConverter implements Serializable {
                 // but other precision like decimal(30, 0) can work too from lenient consideration.
                 return val ->
                         val instanceof BigInteger
-                                ? DecimalData.fromBigDecimal(
-                                new BigDecimal((BigInteger) val, 0), precision, scale)
+                                ? DecimalData.fromBigDecimal(new BigDecimal((BigInteger) val, 0), precision, scale)
                                 : DecimalData.fromBigDecimal((BigDecimal) val, precision, scale);
             case DATE:
                 return val -> (int) (((Date) val).toLocalDate().toEpochDay());
