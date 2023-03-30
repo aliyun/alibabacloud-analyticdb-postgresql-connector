@@ -610,13 +610,11 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             if (e instanceof BatchUpdateException) {
                 e = ((BatchUpdateException) e).getNextException();
             }
-            if (existsPrimaryKeys
-                    && (writeMode == 2 || (
-                    e.getMessage() != null
-                            && e.getMessage().indexOf("duplicate key") != -1
-                            && e.getMessage().indexOf("violates unique constraint") != -1
-                            && "upsert".equalsIgnoreCase(conflictMode))
-            )) {
+            if (existsPrimaryKeys                   /** conflictMode = 'upsert', use insert on conflict */
+                    && (writeMode == 2 || (e.getMessage() != null
+                            && e.getMessage().contains("duplicate key")
+                            && e.getMessage().contains("violates unique constraint")
+                            && "upsert".equalsIgnoreCase(conflictMode)))) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -628,7 +626,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStr);
                 for (RowData row : rows) {
                     // TODO refactor here, try insert first is not necessary, use update/upsert/report error directly
-                    // try to insert record one by one first
+                    // try to insert record on by one first
                     try {
                         executeSqlWithPrepareStatement(insertSql, Collections.singletonList(row), rowConverter, false);
                     } catch (SQLException insertException) {
@@ -707,20 +705,21 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 preparedStatement.executeBatch();
                 break;
             } catch (SQLException exception) {
-                if (exception instanceof BatchUpdateException) {
-                    exception = ((BatchUpdateException) exception).getNextException();
+                SQLException throwables = exception;
+                if (throwables instanceof BatchUpdateException) {
+                    throwables = ((BatchUpdateException) throwables).getNextException();
                 }
                 LOG.error(
                         String.format(
                                 "Execute sql error, sql: %s, retryTimes: %d", sql, retryTime),
-                        exception);
+                        throwables);
                 if (retryTime == maxRetryTime) {
                     if ("strict".equalsIgnoreCase(exceptionMode)) {
-                        throw exception;
+                        throw throwables;
                     } else {
                         LOG.warn(
                                 "Ignore exception {} when execute sql {}",
-                                exception,
+                                throwables,
                                 sql);
                         sinkSkipCounter.inc();
                     }
