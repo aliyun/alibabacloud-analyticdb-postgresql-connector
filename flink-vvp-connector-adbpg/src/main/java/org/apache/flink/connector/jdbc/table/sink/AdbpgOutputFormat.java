@@ -299,9 +299,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             ResultSet rs = statement.executeQuery("show adbpg_version ;");
             if (rs.next()) {
                 String versionStr = rs.getString("adbpg_version");
-                if (StringUtils.isBlank(versionStr)) {
-                    return res;
-                }
                 res = Long.parseLong(versionStr.replaceAll("\\.", ""));
             }
         } catch (SQLException e) {
@@ -613,11 +610,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             if (e instanceof BatchUpdateException) {
                 e = ((BatchUpdateException) e).getNextException();
             }
-            if (existsPrimaryKeys                   /** conflictMode = 'upsert', use insert on conflict */
-                    && (writeMode == 2 || (e.getMessage() != null
-                            && e.getMessage().contains("duplicate key")
-                            && e.getMessage().contains("violates unique constraint")
-                            && "upsert".equalsIgnoreCase(conflictMode)))) {
+            if (existsPrimaryKeys
+                    && (writeMode == 2 || (
+                    e.getMessage() != null
+                            && e.getMessage().indexOf("duplicate key") != -1
+                            && e.getMessage().indexOf("violates unique constraint") != -1
+                            && "upsert".equalsIgnoreCase(conflictMode))
+            )) {
                 LOG.warn("batch insert failed in upsert mode, will try to upsert records one by one");
                 for (RowData row : rows) {
                     upsertRow(row);
@@ -629,7 +628,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStr);
                 for (RowData row : rows) {
                     // TODO refactor here, try insert first is not necessary, use update/upsert/report error directly
-                    // try to insert record on by one first
+                    // try to insert record one by one first
                     try {
                         executeSqlWithPrepareStatement(insertSql, Collections.singletonList(row), rowConverter, false);
                     } catch (SQLException insertException) {
@@ -708,21 +707,20 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 preparedStatement.executeBatch();
                 break;
             } catch (SQLException exception) {
-                SQLException throwables = exception;
-                if (throwables instanceof BatchUpdateException) {
-                    throwables = ((BatchUpdateException) throwables).getNextException();
+                if (exception instanceof BatchUpdateException) {
+                    exception = ((BatchUpdateException) exception).getNextException();
                 }
                 LOG.error(
                         String.format(
                                 "Execute sql error, sql: %s, retryTimes: %d", sql, retryTime),
-                        throwables);
+                        exception);
                 if (retryTime == maxRetryTime) {
                     if ("strict".equalsIgnoreCase(exceptionMode)) {
-                        throw throwables;
+                        throw exception;
                     } else {
                         LOG.warn(
                                 "Ignore exception {} when execute sql {}",
-                                throwables,
+                                exception,
                                 sql);
                         sinkSkipCounter.inc();
                     }
@@ -752,6 +750,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private long executeCopy(byte[] data) throws SQLException, IOException {
         long bps = data.length;
         InputStream inputStream = new ByteArrayInputStream(data);
+        if (inputStream == null) {
+            return 0;
+        }
         inputStream.mark(0);
         int retryTime = 0;
         while (retryTime++ < maxRetryTime) {
