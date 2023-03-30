@@ -85,9 +85,7 @@ public class AdbpgDialect implements Serializable {
                         .map(this::quoteIdentifier)
                         .collect(Collectors.joining(", "));
         String conflictAction = "";
-        if ("ignore".equalsIgnoreCase(conflictMode)) {
-            conflictAction = " DO on conflict DO nothing";
-        } else {
+        if (!"ignore".equalsIgnoreCase(conflictMode)) {
             conflictAction = " DO on conflict DO update";
         }
         return "COPY "
