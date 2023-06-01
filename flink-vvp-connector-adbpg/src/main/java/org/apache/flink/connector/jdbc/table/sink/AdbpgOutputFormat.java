@@ -307,6 +307,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         return res;
     }
 
+    // check if table is partition table, if it is true, we shouldn't use upsert statement.
     private boolean checkPartition() {
         boolean res = false;
         try {
@@ -329,7 +330,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
-            if (getVersion() < adbpg_version && checkPartition()) {
+            if (getVersion() < adbpg_version && checkPartition()) {     // check if table is partition table, if it is true, we shouldn't use upsert statement.
                 support_upsert = false;
             }
             rawConn = (DruidPooledConnection) connection;
