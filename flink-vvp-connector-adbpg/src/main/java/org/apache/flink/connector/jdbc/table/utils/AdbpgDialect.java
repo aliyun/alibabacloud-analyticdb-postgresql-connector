@@ -101,7 +101,7 @@ public class AdbpgDialect implements Serializable {
                 + ")"
                 + " FROM "
                 + file
-                + " "
+                + " NULL 'null' "
                 + (support_upsert ? conflictAction : "");
     }
 

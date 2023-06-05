@@ -299,9 +299,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             ResultSet rs = statement.executeQuery("show adbpg_version ;");
             if (rs.next()) {
                 String versionStr = rs.getString("adbpg_version");
-                if (StringUtils.isBlank(versionStr)) {
-                    return res;
-                }
                 res = Long.parseLong(versionStr.replaceAll("\\.", ""));
             }
         } catch (SQLException e) {
@@ -310,6 +307,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         return res;
     }
 
+    // check if table is partition table, if it is true, we shouldn't use upsert statement.
     private boolean checkPartition() {
         boolean res = false;
         try {
@@ -332,7 +330,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
-            if (getVersion() < adbpg_version && checkPartition()) {
+            if (getVersion() < adbpg_version && checkPartition()) {     // check if table is partition table, if it is true, we shouldn't use upsert statement.
                 support_upsert = false;
             }
             rawConn = (DruidPooledConnection) connection;
@@ -752,6 +750,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private long executeCopy(byte[] data) throws SQLException, IOException {
         long bps = data.length;
         InputStream inputStream = new ByteArrayInputStream(data);
+        if (inputStream == null) {
+            return 0;
+        }
         inputStream.mark(0);
         int retryTime = 0;
         while (retryTime++ < maxRetryTime) {
