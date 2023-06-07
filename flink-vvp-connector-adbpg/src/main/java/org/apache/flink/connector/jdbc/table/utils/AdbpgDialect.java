@@ -17,8 +17,18 @@
 
 package org.apache.flink.connector.jdbc.table.utils;
 
+import org.apache.flink.connector.jdbc.table.sink.AdbpgOutputFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,6 +39,10 @@ public class AdbpgDialect implements Serializable {
 
     private final boolean caseSensitive;
     private final String targetSchema;
+
+    private static final Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
+
+    protected List<String> tablePKs = new ArrayList<String>();          // Used to generate "upsert" SQL for ADBPG
 
     public AdbpgDialect(String targetSchema, boolean caseSensitive) {
         this.caseSensitive = caseSensitive;
@@ -78,6 +92,59 @@ public class AdbpgDialect implements Serializable {
                 + (support_upsert ? conflictAction : "");
     }
 
+    public String getPKsFromADBPGTable(Connection conn, String targetSchema, String targetTable) {
+
+        if (this.tablePKs.size() > 0) {
+            String pks = Arrays.toString(tablePKs.toArray());
+            LOG.info("Table pks:" + pks);
+            return pks;
+        }
+
+        final String DEFAULT_POSTGRESQL_SCHEMA = "public";
+        try {
+            // The assembled upsert statement is used to query all primary key column names form the given adbpg table
+            PreparedStatement pstm = conn.prepareStatement(
+                    "SELECT a.attname " +
+                            "FROM pg_constraint AS c " +
+                            "CROSS JOIN LATERAL UNNEST(c.conkey) AS cols(colnum) " +
+                            "INNER JOIN pg_attribute AS a " +
+                            "ON a.attrelid = c.conrelid AND cols.colnum = a.attnum " +
+                            "WHERE c.contype = 'p' AND c.conrelid = ?::REGCLASS"
+            );
+            String schema_name = quoteIdentifier(targetSchema);
+            String table_name = quoteIdentifier(targetTable);
+
+            pstm.setString(1, schema_name + "." + table_name);
+
+            LOG.info("Getting primary keys of table " + schema_name + "." + table_name + " with sql:" + pstm.toString());
+
+            ResultSet resultSet = pstm.executeQuery();
+            while (resultSet.next()) {
+                tablePKs.add(resultSet.getString(1));
+            }
+
+            String pks = Arrays.toString(tablePKs.toArray());
+
+            LOG.info("Table pks:" + pks);
+
+            return pks;
+        } catch (SQLException e) {
+            LOG.error("Get adbpg table primary keys error.", e);
+            System.exit(255);
+        }
+        return null;
+    }
+
+    /**
+     * Get dialect copy into statement,
+     * if conflictMode is "upsert", use copy-on-conflict statement, otherwise use normal copy statement.
+     * @param tableName
+     * @param columnnames which in target table
+     * @param file The medium of 'copy from' in flink normally 'STDIN'
+     * @param conflictMode "ignore" or "strict" or "update" or "upsert"
+     * @param support_upsert whether support upsert
+     * @return
+     */
     public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode,
                                    boolean support_upsert) {
         String columns =
