@@ -6,7 +6,8 @@
 该功能暂不支持AnalyticDB PostgreSQL版Serverless模式。
 仅Flink实时计算引擎VVR 6.0.0及以上版本支持云原生数据仓库AnalyticDB PostgreSQL版连接器，且该连接器暂不支持云原生数据仓库AnalyticDB PostgreSQL版7.0版。
 
-> 说明 如果您使用了自定义连接器，具体操作请参见管理[自定义连接器](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
+> 说明:
+> 如果您使用了自定义连接器，具体操作请参见管理[自定义连接器](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
 
 ## 前提条件
 * AnalyticDB PostgreSQL版实例和Flink全托管工作空间需要位于同一VPC下。
@@ -124,8 +125,10 @@ PRIMARY KEY(B1) not ENFORCED
    - 单击启动。
 > 说明 Session集群适用于非生产环境的开发测试环境，您可以使用Session集群模式调试作业，提高作业JM（Job Manager）资源利用率和作业启动速度。但不推荐您将作业提交至Session集群中，因为会存在业务稳定性问题，详情请参见[作业调试](https://help.aliyun.com/zh/flink/user-guide/debug-a-deployment?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
 
+## 写入逻辑说明
+TODO
 
-# 观察同步结果
+## 观察同步结果
 连接AnalyticDB PostgreSQL版数据库。具体操作，请参见客户端连接。
 执行以下语句查询test_adbpg_table表。
 SELECT * FROM test_adbpg_table;
