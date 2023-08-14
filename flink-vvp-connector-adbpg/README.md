@@ -119,13 +119,13 @@ PRIMARY KEY(B1) not ENFORCED
 > 说明 支持参数和类型映射，详情请参见连接器云原生数据仓库AnalyticDB PostgreSQL版。
 
 3. 启动作业
-
-    a. 在作业开发页面顶部，单击部署，在弹出的对话框中，单击确定。
+   - 在作业开发页面顶部，单击部署，在弹出的对话框中，单击确定。
+   - 在作业运维页面，单击目标作业操作列的启动。
+   - 单击启动。
 > 说明 Session集群适用于非生产环境的开发测试环境，您可以使用Session集群模式调试作业，提高作业JM（Job Manager）资源利用率和作业启动速度。但不推荐您将作业提交至Session集群中，因为会存在业务稳定性问题，详情请参见[作业调试](https://help.aliyun.com/zh/flink/user-guide/debug-a-deployment?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
->
-b. 在作业运维页面，单击目标作业操作列的启动。
-单击启动。
-观察同步结果
+
+
+# 观察同步结果
 连接AnalyticDB PostgreSQL版数据库。具体操作，请参见客户端连接。
 执行以下语句查询test_adbpg_table表。
 SELECT * FROM test_adbpg_table;
