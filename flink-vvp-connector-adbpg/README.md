@@ -3,8 +3,10 @@
 此项目用于alibaba公有云产品[adbpg](https://www.aliyun.com/product/apsaradb/gpdb)，本文介绍如何通过阿里云实时计算Flink版写入数据到AnalyticDB PostgreSQL版。
 
 # 特别说明
-adbpg connector在aliyun存在两个版本，[开源版本](https://github.com/aliyun/alibabacloud-analyticdb-postgresql-connector)和[商业版本](https://help.aliyun.com/zh/flink/use-cases/read-analyticdb-for-postgresql-data-by-using-realtime-compute-for-apache-flink?spm=a2c4g.11186623.0.0.63346986iYy6zO)。<br>
-商业版：[公有云托管版flink](https://www.aliyun.com/product/bigdata/sc?spm=5176.23667485.J_4VYgf18xNlTAyFFbOuOQe.183.2ec774fbcsTml8&scm=20140722.X_data-30fc6ea88dfef9d209f0._.V_1)内置了adbpg connector，相较于开源版有更完善的开发平台和监控系统，建议购买了商业版版本的用户直接使用内置adbpg connector，会有7*24小时值班服务。<br>
+adbpg connector在aliyun存在两个版本，[开源版本](https://github.com/aliyun/alibabacloud-analyticdb-postgresql-connector)和[商业版本](https://help.aliyun.com/zh/flink/use-cases/read-analyticdb-for-postgresql-data-by-using-realtime-compute-for-apache-flink?spm=a2c4g.11186623.0.0.63346986iYy6zO)。
+<br>
+商业版：[公有云托管版flink](https://www.aliyun.com/product/bigdata/sc?spm=5176.23667485.J_4VYgf18xNlTAyFFbOuOQe.183.2ec774fbcsTml8&scm=20140722.X_data-30fc6ea88dfef9d209f0._.V_1)内置了adbpg connector，相较于开源版有更完善的开发平台和监控系统，建议购买了商业版版本的用户直接使用内置adbpg connector，会有7*24小时值班服务。
+<br>
 开源版：对于自建flink的用户并且使用了adbpg的用户，可以使用本项目作为flink与adbpg的对接途径。另外由于本项目为开源项目，不需要商业版的发版过程，部分特性更新可能领先于商业版，如果需要这些功能商业版用户也可以使用[自定义connector方式](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)使用此项目connector。
 <br>
 另外欢迎提交commit和issue，共同完善项目功能和使用体验。
