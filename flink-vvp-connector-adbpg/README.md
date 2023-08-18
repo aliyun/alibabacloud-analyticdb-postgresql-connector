@@ -126,7 +126,16 @@ PRIMARY KEY(B1) not ENFORCED
 > 说明 Session集群适用于非生产环境的开发测试环境，您可以使用Session集群模式调试作业，提高作业JM（Job Manager）资源利用率和作业启动速度。但不推荐您将作业提交至Session集群中，因为会存在业务稳定性问题，详情请参见[作业调试](https://help.aliyun.com/zh/flink/user-guide/debug-a-deployment?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
 
 ## 写入逻辑说明
-TODO
+### 写入阶段
+按照writemode参数指定的方式执行初次写入(推荐使用copy)，四种方式的区别如下：
+* insert: 使用最常见的`insert into TABLE values(xx,xx,xx)`方式，对于adbpg而言，此方式易用性较好，但由于adbpg实现机制的关系（分布式，并且需要两阶段提交，insert不复用执行计划和网络链路），性能较差，不推荐使用。
+* copy: 使用postgresql特有的copy语法`copy TABLE(col1, col2, col3) from stdin xxxx`语法进行写入，解决了insert方式的写入性能问题，推荐使用。
+* insert on conflict: 使用postgresql的upsert语法`insert into TABLE on conflict do update`语法写入，如果待写入数据与目标表有主键冲突，会使用待写入数据替换掉目标表内数据。
+* copy on conflict: 在writemode为copy,conflictmode为upsert时自动开启，使用`copy TABLE from STDIN on conflict`语法写入，与insert on conflict与insert之间的关系类似，copy on conflict提供了在copy遇到主键冲突时内核可自动覆盖数据的功能。
+内部会按照batchsize与batchwritetimeoutms两种水位配置进行攒批，当其中触发任何一个水位阈值后，connector将进行本次batch的commit操作。如果过程中无主键冲突，则执行下一次攒批写入，如果遇到数据冲突，进入冲突解决阶段。
+
+### 冲突解决阶段
+按照conflictmode配置的模式进行写入
 
 ## 观察同步结果
 连接AnalyticDB PostgreSQL版数据库。具体操作，请参见客户端连接。
