@@ -1,10 +1,11 @@
 # 通过实时计算Flink版写入数据到云原生数据仓库AnalyticDB PostgreSQL版
 
-此项目用于alibaba公有云产品[adbpg](https://www.aliyun.com/product/apsaradb/gpdb)，本文介绍如何通过阿里云实时计算Flink版写入数据到AnalyticDB PostgreSQL版。
+此项目用于alibaba公有云产品[adbpg](https://www.aliyun.com/product/apsaradb/gpdb)，此项目为使用table api方式开发的adbpg connector，用于在flink通过sql方式读取和写入adbpg数据并进行流式ETL。greenplum由于语法同样基于Postgresql，理论上除adbpg特有语法相关配置外可以通用。
 
 # 特别说明
 adbpg connector在aliyun存在两个版本，[开源版本](https://github.com/aliyun/alibabacloud-analyticdb-postgresql-connector)和[商业版本](https://help.aliyun.com/zh/flink/use-cases/read-analyticdb-for-postgresql-data-by-using-realtime-compute-for-apache-flink?spm=a2c4g.11186623.0.0.63346986iYy6zO)。
 <br>
+
 **商业版**：[公有云托管版flink](https://www.aliyun.com/product/bigdata/sc?spm=5176.23667485.J_4VYgf18xNlTAyFFbOuOQe.183.2ec774fbcsTml8&scm=20140722.X_data-30fc6ea88dfef9d209f0._.V_1)内置了adbpg connector，相较于开源版有更完善的开发平台和监控系统，建议购买了商业版版本的用户直接使用内置adbpg connector，会有7*24小时值班服务。
 <br>
 
