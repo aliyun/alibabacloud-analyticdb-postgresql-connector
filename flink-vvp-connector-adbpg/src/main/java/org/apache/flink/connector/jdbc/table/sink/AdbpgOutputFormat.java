@@ -639,14 +639,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 if (isDuplicateKeyException) {
                     if ("strict".equalsIgnoreCase(conflictMode)) {                    // conflictMode = 'strict', report error without any action
                         throw new RuntimeException("duplicate key value violates unique constraint");
-                    } else if ("update".equalsIgnoreCase(conflictMode)) {             // conflictMode = 'update', use update sql
-                        LOG.warn("Retrying to replace record with update.");
-                        updateRow(row);
                     } else if ("upsert".equalsIgnoreCase(conflictMode)) {             // conflictMode = 'upsert', use upsert sql
                         LOG.warn("Retrying to replace record with upsert.");
                         upsertRow(row);
                     } else if ("ignore".equalsIgnoreCase(conflictMode)) {
                         LOG.warn("Batch write failed, because preset conflictmode is 'ignore', connector will skip this row");
+                    } else {
+
                     }
                 } else {
                     // exceptionMode only have "strict" and "ignore", if this is "ignore" return directly without report an expection
