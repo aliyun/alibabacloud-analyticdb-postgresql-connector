@@ -2,9 +2,21 @@
 
 此项目用于alibaba公有云产品[adbpg](https://www.aliyun.com/product/apsaradb/gpdb)，本文介绍如何通过阿里云实时计算Flink版写入数据到AnalyticDB PostgreSQL版。
 
+# 特别说明
+adbpg connector在aliyun存在两个版本，[开源版本](https://github.com/aliyun/alibabacloud-analyticdb-postgresql-connector)和[商业版本](https://help.aliyun.com/zh/flink/use-cases/read-analyticdb-for-postgresql-data-by-using-realtime-compute-for-apache-flink?spm=a2c4g.11186623.0.0.63346986iYy6zO)。
+商业版：[公有云托管版flink](https://www.aliyun.com/product/bigdata/sc?spm=5176.23667485.J_4VYgf18xNlTAyFFbOuOQe.183.2ec774fbcsTml8&scm=20140722.X_data-30fc6ea88dfef9d209f0._.V_1)内置了adbpg connector，相较于开源版有更完善的开发平台和监控系统，建议购买了商业版版本的用户直接使用内置adbpg connector，会有7*24小时值班服务。
+开源版：对于自建flink的用户并且使用了adbpg的用户，可以使用本项目作为flink与adbpg的对接途径。另外由于本项目为开源项目，不需要商业版的发版过程，部分特性更新可能领先于商业版，如果需要这些功能商业版用户也可以使用[自定义connector方式](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)使用此项目connector。
+
+另外欢迎提交commit和issue，共同完善项目功能和使用体验。
+
+# 最佳实践汇总
+* [通过Flink将Kafka数据同步至AnalyticDB PostgreSQL版](https://help.aliyun.com/document_detail/606470.html?spm=a2c4g.35364.0.i1)
+* [通过Flink集成向量数据](https://help.aliyun.com/document_detail/2411195.html?spm=a2c4g.606470.0.i4)
+* [通过Flink读取云原生数据仓库AnalyticDB PostgreSQL](https://help.aliyun.com/document_detail/408978.html?spm=a2c4g.2402144.0.0.23a914749hTLen)
+
+# 使用方式
 ## 使用限制
 该功能暂不支持AnalyticDB PostgreSQL版Serverless模式。
-仅Flink实时计算引擎VVR 6.0.0及以上版本支持云原生数据仓库AnalyticDB PostgreSQL版连接器，且该连接器暂不支持云原生数据仓库AnalyticDB PostgreSQL版7.0版。
 
 > 说明:
 > 如果您使用了自定义连接器，具体操作请参见管理[自定义连接器](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
@@ -126,6 +138,8 @@ PRIMARY KEY(B1) not ENFORCED
 > 说明 Session集群适用于非生产环境的开发测试环境，您可以使用Session集群模式调试作业，提高作业JM（Job Manager）资源利用率和作业启动速度。但不推荐您将作业提交至Session集群中，因为会存在业务稳定性问题，详情请参见[作业调试](https://help.aliyun.com/zh/flink/user-guide/debug-a-deployment?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
 
 ## 写入逻辑说明
+connector在收到数据后
+
 ### 写入阶段
 按照writemode参数指定的方式执行初次写入(推荐使用copy)，四种方式的区别如下：
 * insert: 使用最常见的`insert into TABLE values(xx,xx,xx)`方式，对于adbpg而言，此方式易用性较好，但由于adbpg实现机制的关系（分布式，并且需要两阶段提交，insert不复用执行计划和网络链路），性能较差，不推荐使用。
@@ -136,9 +150,9 @@ PRIMARY KEY(B1) not ENFORCED
 
 ### 冲突解决阶段
 遇到主键冲突错误后，按照conflictmode配置的模式进行写入
+* upsert: 默认值，使用update的方式对数据进行**逐行**(不会)更新。
 * static: connector将错误信息以expection的形式打印到日志后退出。最为严格的模式
-* upsert: 使用update的方式对数据进行**逐行**(不会)更新
-* ignore: 忽略报错，进入下一次攒批写入阶段
+* ignore: 忽略报错，进入下一次攒批写入阶段。
 
 ## 观察同步结果
 连接AnalyticDB PostgreSQL版数据库。具体操作，请参见客户端连接。
