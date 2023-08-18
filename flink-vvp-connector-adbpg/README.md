@@ -108,7 +108,7 @@ PRIMARY KEY(B1) not ENFORCED
 | maxretrytimes       | 否    | SQL执行失败后重试次数，默认为3次。                                                                                                                                                                                                                                                                                                                                                                                        |
 | batchsize           | 否    | 一次批量写入的最大条数，默认为50000条。                                                                                                                                                                                                                                                                                                                                                                                     |
 | exceptionmode       | 否    | 数据写入过程中出现异常时的处理策略。支持以下两种处理策略：<br>* ignore（默认值）：忽略出现异常时写入的数据。<br>* strict：数据写入异常时，故障转移（Failover）并报错。                                                                                                                                                                                                                                                                                                        |
-| conflictmode        | 否    | 当出现主键冲突或者唯一索引冲突时的处理策略。支持以下四种处理策略：<br>* ignore ：忽略主键冲突，保留之前的数据。<br>* strict：主键冲突时，故障转移（Failover）并报错。<br>* update：主键冲突时，更新新到的数据。<br>* upsert（默认值）：主键冲突时，采用UPSERT方式写入数据。<br>AnalyticDB PostgreSQL版通过INSERT ON CONFLICT和COPY ON CONFLICT实现UPSERT写入数据，如果目标表为分区表，则需要内核小版本为V6.3.6.1及以上，如何升级内核小版本，请参见[版本升级](https://help.aliyun.com/document_detail/139271.html?spm=a2c4g.408979.0.0.c9da402czZ7Rlv#task-2245828)。 |
+| conflictmode        | 否    | 当出现主键冲突或者唯一索引冲突时的处理策略。支持以下四种处理策略：<br>* ignore ：忽略主键冲突，保留之前的数据。<br>* strict：主键冲突时，故障转移（Failover）并报错。<br>* upsert（默认值）：主键冲突时，采用UPSERT方式写入数据。<br>AnalyticDB PostgreSQL版通过INSERT ON CONFLICT和COPY ON CONFLICT实现UPSERT写入数据，如果目标表为分区表，则需要内核小版本为V6.3.6.1及以上，如何升级内核小版本，请参见[版本升级](https://help.aliyun.com/document_detail/139271.html?spm=a2c4g.408979.0.0.c9da402czZ7Rlv#task-2245828)。 |
 | targetschema        | 否    | AnalyticDB PostgreSQL版的Schema，默认为public。                                                                                                                                                                                                                                                                                                                                                                   |
 | writemode           | 否    | 写入方式。取值说明：<br>0 ：采用BATCH INSERT方式写入数据。<br>1：默认值，采用COPY API写入数据。<br>2：采用BATCH UPSERT方式写入数据。<br>如果`writemode=1`并且`conflictmode=upsert`时，程序内部会自动开启copy on conflict语法执行最初的攒批写入操作。                                                                                                                                                                                                                              |
 | verbose             | 否    | 是否输出connector运行日志。取值说明：<br>* 0（默认）：不输出运行日志。<br>* 1：输出运行日志。                                                                                                                                                                                                                                                                                                                                                 |
@@ -135,7 +135,10 @@ PRIMARY KEY(B1) not ENFORCED
 内部会按照batchsize与batchwritetimeoutms两种水位配置进行攒批，当其中触发任何一个水位阈值后，connector将进行本次batch的commit操作。如果过程中无主键冲突，则执行下一次攒批写入，如果遇到数据冲突，进入冲突解决阶段。
 
 ### 冲突解决阶段
-按照conflictmode配置的模式进行写入
+遇到主键冲突错误后，按照conflictmode配置的模式进行写入
+* static: connector将错误信息以expection的形式打印到日志后退出。最为严格的模式
+* upsert: 使用update的方式对数据进行**逐行**(不会)更新
+* ignore: 忽略报错，进入下一次攒批写入阶段
 
 ## 观察同步结果
 连接AnalyticDB PostgreSQL版数据库。具体操作，请参见客户端连接。
