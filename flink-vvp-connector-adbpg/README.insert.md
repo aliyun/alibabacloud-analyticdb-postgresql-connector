@@ -76,7 +76,7 @@ CREATE TABLE test_adbpg_table (
 `B4` VARCHAR,
 PRIMARY KEY(B1) not ENFORCED
 ) with (
-'connector' = 'adbpg-nightly-1.13',
+'connector' = 'adbpg-nightly-1.14',
 'password' = 'xxx',
 'tablename' = 'test_adbpg_table',
 'username' = 'xxxx',
