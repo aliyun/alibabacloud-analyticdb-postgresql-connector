@@ -12,7 +12,8 @@ adbpg connector在aliyun存在两个版本，[开源版本](https://github.com/a
 **开源版**：对于使用自建[apache flink](https://flink.apache.org)并且使用了adbpg的用户，可以使用本项目作为flink与adbpg的对接途径。
 <br>
 
-另外由于本项目为开源项目，不需要商业版的发版过程，部分特性更新可能领先于商业版，如果需要这些功能商业版用户也可以使用[自定义connector方式](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)使用此项目connector。
+
+> 由于本项目为开源项目，不需要商业版的发版过程，部分特性更新可能领先于商业版，如果需要这些功能商业版用户需要使用也通过使用[自定义connector方式](https://help.aliyun.com/zh/flink/user-guide/manage-custom-connectors?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)应用此connector。
 欢迎提交commit和issue，共同完善项目功能和使用体验。
 
 # 最佳实践汇总
