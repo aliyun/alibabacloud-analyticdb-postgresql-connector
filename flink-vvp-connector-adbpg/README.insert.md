@@ -123,7 +123,7 @@ PRIMARY KEY(B1) not ENFORCED
 > 说明 Session集群适用于非生产环境的开发测试环境，您可以使用Session集群模式调试作业，提高作业JM（Job Manager）资源利用率和作业启动速度。但不推荐您将作业提交至Session集群中，因为会存在业务稳定性问题，详情请参见[作业调试](https://help.aliyun.com/zh/flink/user-guide/debug-a-deployment?spm=a2c4g.408979.0.0.c9da402czZ7Rlv)。
 
 ## 写入逻辑说明
-connector在收到数据后
+connector在收到数据后，先进入到**写入阶段**处理初次数据写入，如遇到**主键冲突**问题，则进入到**冲突解决**阶段，如无主键冲突问题，等待**下一次**数据写入阶段。
 
 ### 写入阶段
 按照writemode参数指定的方式执行初次写入(推荐使用copy)，四种方式的区别如下：
@@ -143,4 +143,4 @@ connector在收到数据后
 连接AnalyticDB PostgreSQL版数据库。具体操作，请参见客户端连接。
 执行以下语句查询test_adbpg_table表。
 SELECT * FROM test_adbpg_table;
-数据正常写入到AnalyticDB PostgreSQL版中，返回示例如下。
+
