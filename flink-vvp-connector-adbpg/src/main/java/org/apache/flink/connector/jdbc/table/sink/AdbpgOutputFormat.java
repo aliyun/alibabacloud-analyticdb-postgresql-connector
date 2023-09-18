@@ -92,7 +92,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private final JdbcRowConverter upsertConverter;
     private final StringFormatRowConverter copyModeRowConverter;
     private final AdbpgDialect adbpgDialect;
-    String[] fieldNamesStr;
+    String[] fieldNamesStrs;
     LogicalType[] lts;
     private String url;
     private String tableName;
@@ -159,7 +159,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
     public AdbpgOutputFormat(
             int fieldNum,
-            String[] fieldNamesStr,
+            String[] fieldNamesStrs,
             String[] keyFields,
             LogicalType[] lts,
             ReadableConfig config
@@ -185,24 +185,23 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.lts = lts;
         this.rowDataSerializer = new RowDataSerializer(this.lts);
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
-        this.fieldNamesStr = fieldNamesStr;
-        this.fieldNames = joinerOnComma.join(fieldNamesStr);
+        this.fieldNamesStrs = fieldNamesStrs;
 
         if (keyFields != null) {
             this.pkTypes = new LogicalType[keyFields.length];
             for (int i = 0; i < keyFields.length; i++) {
                 pkFields.add(keyFields[i]);
                 int t = 0;
-                for (; t < fieldNamesStr.length; t++) {
-                    if (keyFields[i].equals(fieldNamesStr[t])) {
+                for (; t < fieldNamesStrs.length; t++) {
+                    if (keyFields[i].equals(fieldNamesStrs[t])) {
                         pkIndex.add(t);
                         break;
                     }
                 }
-                if (fieldNamesStr.length == t) {
+                if (fieldNamesStrs.length == t) {
                     throw new RuntimeException("Key cannot found in filenames.");
                 }
-                int keyIdx = fieldNames.indexOf(keyFields[i]);
+                int keyIdx = Arrays.asList(fieldNamesStrs).indexOf(keyFields[i]);
                 this.pkTypes[i] = lts[keyIdx];
             }
             this.primaryKeys = new HashSet<>(pkFields);
@@ -233,7 +232,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             int primaryIndex = 0;
             int excludedIndex = 0;
             for (int i = 0; i < fieldNum; i++) {
-                String fileName = fieldNamesStr[i];
+                String fileName = fieldNamesStrs[i];
                 fieldNamesStrCaseSensitive[i] = "\"" + fileName + "\"";
                 if (primaryKeys.contains(fileName)) {
                     primaryFieldNamesStr[primaryIndex] = fileName;
@@ -257,7 +256,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             int j = 0;
             this.updateStatementFieldIndices = new int[nonPrimaryFieldNamesStr.length + primaryFieldNamesStr.length];
             for (int i = 0; i < lts.length; ++i) {
-                if (Arrays.asList(this.primaryFieldNamesStr).contains(fieldNamesStr[i])) {
+                if (Arrays.asList(this.primaryFieldNamesStr).contains(fieldNamesStrs[i])) {
                     continue;
                 }
                 updateStatementFieldIndices[j] = i;
@@ -540,7 +539,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     }
                 }
                 String sql =
-                        adbpgDialect.getDeleteStatementWithNull(tableName, fieldNamesStr, nullFieldsIndex);
+                        adbpgDialect.getDeleteStatementWithNull(tableName, fieldNamesStrs, nullFieldsIndex);
 
                 if (nullFieldsIndex.size() > 0) {
                     LogicalType[] types = new LogicalType[rowData.getArity() - nullFieldsIndex.size()];
@@ -607,10 +606,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 long end = System.currentTimeMillis();
                 reportMetric(rows, start, end, bps);
             } else if (writeMode == 2) {            /** batch upsert */
-                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
+                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
                 executeSqlWithPrepareStatement(sql, rows, rowConverter, false);
             } else if (writeMode == 0) {            /** batch insert */
-                String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStr);
+                String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStrs);
                 executeSqlWithPrepareStatement(insertSql, rows, rowConverter, false);
             } else {
                 LOG.error("Unsupported write mode: " + writeMode);
@@ -764,7 +763,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     LOG.info("recreate copyManager within executeCopy");
                     copyManager = new CopyManager(baseConn);
                 }
-                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStr, "STDIN", conflictMode, support_upsert);
+                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, support_upsert);
                 LOG.info("Writing data with sql:" + sql);
                 copyManager.copyIn(sql, inputStream);
                 break;
@@ -789,7 +788,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
      * @param row
      */
     private void upsertRow(RowData row) {
-        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStr, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
+        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
         LOG.debug("Upserting row with sql:" + sql);
         try {
             executeSqlWithPrepareStatement(sql, Collections.singletonList(row), rowConverter, false);
