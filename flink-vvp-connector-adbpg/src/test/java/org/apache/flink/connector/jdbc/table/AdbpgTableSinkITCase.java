@@ -45,7 +45,7 @@ public class AdbpgTableSinkITCase extends JdbcTableSinkITCaseBase {
         String adbpgPassword = AdbpgTestConfParser.INSTANCE.getPassword();
         paramList.add(
                 new Object[] {
-                    "adbpg", adbpgURL, adbpgUserName, adbpgPassword, "org.postgresql.Driver"
+                    "adbpg-nightly-1.13", adbpgURL, adbpgUserName, adbpgPassword, "org.postgresql.Driver"
                 });
 
         return paramList;
