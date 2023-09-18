@@ -32,9 +32,12 @@ import java.sql.ResultSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
 
-/** Tests the adbpg sink. */
+/**
+ * Tests the adbpg sink.
+ */
 @RunWith(Parameterized.class)
 public class AdbpgDynamicSinkTestForInsert extends LegacyJdbcSinkFunctionITCaseBase {
 
@@ -52,12 +55,8 @@ public class AdbpgDynamicSinkTestForInsert extends LegacyJdbcSinkFunctionITCaseB
                     {
                         this.put("connector", CONNECTOR_TYPE);
                         this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
-                        this.put(
-                                AdbpgOptions.USERNAME.key(),
-                                AdbpgTestConfParser.INSTANCE.getUsername());
-                        this.put(
-                                AdbpgOptions.PASSWORD.key(),
-                                AdbpgTestConfParser.INSTANCE.getPassword());
+                        this.put(AdbpgOptions.USERNAME.key(), AdbpgTestConfParser.INSTANCE.getUsername());
+                        this.put(AdbpgOptions.PASSWORD.key(), AdbpgTestConfParser.INSTANCE.getPassword());
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
                         this.put(AdbpgOptions.WRITE_MODE.key(), "0");
@@ -68,12 +67,8 @@ public class AdbpgDynamicSinkTestForInsert extends LegacyJdbcSinkFunctionITCaseB
                     {
                         this.put("connector", CONNECTOR_TYPE);
                         this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
-                        this.put(
-                                AdbpgOptions.USERNAME.key(),
-                                AdbpgTestConfParser.INSTANCE.getUsername());
-                        this.put(
-                                AdbpgOptions.PASSWORD.key(),
-                                AdbpgTestConfParser.INSTANCE.getPassword());
+                        this.put(AdbpgOptions.USERNAME.key(), AdbpgTestConfParser.INSTANCE.getUsername());
+                        this.put(AdbpgOptions.PASSWORD.key(), AdbpgTestConfParser.INSTANCE.getPassword());
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
                         this.put(AdbpgOptions.WRITE_MODE.key(), "0");
@@ -85,12 +80,8 @@ public class AdbpgDynamicSinkTestForInsert extends LegacyJdbcSinkFunctionITCaseB
                     {
                         this.put("connector", CONNECTOR_TYPE);
                         this.put(AdbpgOptions.URL.key(), AdbpgTestConfParser.INSTANCE.getURL());
-                        this.put(
-                                AdbpgOptions.USERNAME.key(),
-                                AdbpgTestConfParser.INSTANCE.getUsername());
-                        this.put(
-                                AdbpgOptions.PASSWORD.key(),
-                                AdbpgTestConfParser.INSTANCE.getPassword());
+                        this.put(AdbpgOptions.USERNAME.key(), AdbpgTestConfParser.INSTANCE.getUsername());
+                        this.put(AdbpgOptions.PASSWORD.key(), AdbpgTestConfParser.INSTANCE.getPassword());
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.WRITE_MODE.key(), "0");
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");

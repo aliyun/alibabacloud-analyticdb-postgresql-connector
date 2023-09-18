@@ -95,7 +95,7 @@ public class AdbpgOptions {
     public static final ConfigOption<Integer> BATCH_WRITE_TIMEOUT_MS =
             ConfigOptions.key("batchwritetimeoutms")
                     .intType()
-                    .defaultValue(50000)
+                    .defaultValue(10000)
                     .withDescription("Timeout setting");
     public static final ConfigOption<Integer> CONNECTION_MAX_ACTIVE =
             ConfigOptions.key("connectionmaxactive")
