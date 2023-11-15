@@ -310,7 +310,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private boolean checkPartition() {
         boolean res = false;
         try {
-            String sql = String.format("select count(*) from pg_inherits where inhparent::regclass='%s'::regclass", tableName);
+            String sql = String.format("select count(*) from pg_inherits where inhparent::regclass='%s.%s'::regclass", targetSchema, tableName);
             statement = connection.createStatement();
             ResultSet rs = statement.executeQuery(sql);
             if (rs.next()) {
@@ -643,8 +643,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                         upsertRow(row);
                     } else if ("ignore".equalsIgnoreCase(conflictMode)) {
                         LOG.warn("Batch write failed, because preset conflictmode is 'ignore', connector will skip this row");
-                    } else {
-
+                    } else {                                                            // conflictMode = 'update' or any other string, use update sql
+                        updateRow(row);
                     }
                 } else {
                     // exceptionMode only have "strict" and "ignore", if this is "ignore" return directly without report an expection
