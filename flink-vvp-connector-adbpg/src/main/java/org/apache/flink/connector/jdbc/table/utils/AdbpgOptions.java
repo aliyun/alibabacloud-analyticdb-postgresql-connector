@@ -370,7 +370,7 @@ public class AdbpgOptions {
         dataSource.setTimeBetweenEvictionRunsMillis(180000);
         dataSource.setMinEvictableIdleTimeMillis(3600000);
         dataSource.setMaxEvictableIdleTimeMillis(9000000);
-        dataSource.setRemoveAbandoned(true);
+        dataSource.setRemoveAbandoned(false);
         dataSource.setRemoveAbandonedTimeout(300);
         LOG.info("connector " + CONNECTOR_TYPE + " created using url=" + url + ", "
                 + "tableName=" + config.get(TABLE_NAME) + ", "
