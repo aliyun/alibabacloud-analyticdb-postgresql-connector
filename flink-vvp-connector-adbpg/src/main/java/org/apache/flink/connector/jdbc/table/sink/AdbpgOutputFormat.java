@@ -309,7 +309,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private boolean checkPartition() {
         boolean res = false;
         try {
-            String sql = String.format("select count(*) from pg_inherits where inhparent::regclass='%s'::regclass", tableName);
+            String sql = String.format("select count(*) from pg_inherits where inhparent::regclass='%s.%s'::regclass", targetSchema, tableName);
             statement = connection.createStatement();
             ResultSet rs = statement.executeQuery(sql);
             if (rs.next()) {
