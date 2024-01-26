@@ -77,6 +77,7 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         optionalOptions.add(AdbpgOptions.BATCH_WRITE_TIMEOUT_MS);
         optionalOptions.add(AdbpgOptions.CONNECTION_MAX_ACTIVE);
         optionalOptions.add(AdbpgOptions.CONFLICT_MODE);
+        optionalOptions.add(AdbpgOptions.ACCESS_METHOD);
         optionalOptions.add(AdbpgOptions.USE_COPY);
         optionalOptions.add(AdbpgOptions.TARGET_SCHEMA);
         optionalOptions.add(AdbpgOptions.EXCEPTION_MODE);

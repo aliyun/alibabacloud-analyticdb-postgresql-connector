@@ -60,6 +60,7 @@ import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.ACCESS_METHOD;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
@@ -145,6 +146,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     // connector parameter
     private boolean reserveMs;
     private String conflictMode;
+    private String accessMethod;
     private int useCopy;
     private String targetSchema;
     private String exceptionMode;
@@ -173,6 +175,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.batchWriteTimeout = config.get(BATCH_WRITE_TIMEOUT_MS);
         this.reserveMs = AdbpgOptions.isConfigOptionTrue(config, RESERVEMS);
         this.conflictMode = config.get(CONFLICT_MODE);
+        this.accessMethod = config.get(ACCESS_METHOD);
         this.useCopy = config.get(USE_COPY);
         this.maxRetryTime = config.get(MAX_RETRY_TIMES);
         this.batchSize = config.get(BATCH_SIZE);
@@ -607,7 +610,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 long end = System.currentTimeMillis();
                 reportMetric(rows, start, end, bps);
             } else if (writeMode == 2) {            /** batch upsert */
-                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
+                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert, accessMethod);
                 executeSqlWithPrepareStatement(sql, rows, rowConverter, false);
             } else if (writeMode == 0) {            /** batch insert */
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStrs);
@@ -791,7 +794,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
      * @param row
      */
     private void upsertRow(RowData row) {
-        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
+        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert, accessMethod);
         LOG.debug("Upserting row with sql:" + sql);
         try {
             executeSqlWithPrepareStatement(sql, Collections.singletonList(row), rowConverter, false);

@@ -107,6 +107,12 @@ public class AdbpgOptions {
                     .stringType()
                     .defaultValue("upsert")
                     .withDescription("Conflict Mode");
+
+    public static final ConfigOption<String> ACCESS_METHOD =
+            ConfigOptions.key("accessmethod")
+                    .stringType()
+                    .defaultValue("heap")
+                    .withDescription("access method and storage type of current table.");
     public static final ConfigOption<Integer> USE_COPY =
             ConfigOptions.key("usecopy")
                     .intType()
@@ -240,6 +246,21 @@ public class AdbpgOptions {
         }
     }
 
+    public static AccessMethod getAccessMethod(ReadableConfig readableConfig) {
+        switch (readableConfig.get(ACCESS_METHOD).toLowerCase()) {
+            case "heap":
+                return AccessMethod.heap;
+            case "beam":
+                return AccessMethod.beam;
+            default:
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Invalid value for config %s : %s",
+                                ACCESS_METHOD.key(),
+                                readableConfig.get(ACCESS_METHOD)));
+        }
+    }
+
     public static WriteMode getWriteMode(ReadableConfig readableConfig) {
         switch (readableConfig.get(WRITE_MODE).toString().toLowerCase()) {
             case "insert":
@@ -286,6 +307,15 @@ public class AdbpgOptions {
 
         public static List<String> stringList() {
             return Stream.of(ConflictMode.values()).map(Enum::name).collect(Collectors.toList());
+        }
+    }
+
+    public enum AccessMethod {
+        heap,
+        beam;
+
+        public static List<String> stringList() {
+            return Stream.of(AccessMethod.values()).map(Enum::name).collect(Collectors.toList());
         }
     }
 
@@ -382,6 +412,7 @@ public class AdbpgOptions {
                 + "connectionMaxActive=" + connectionMaxActive + ", "
                 + "batchWriteTimeoutMs=" + config.get(BATCH_WRITE_TIMEOUT_MS) + ", "
                 + "conflictMode=" + config.get(CONFLICT_MODE) + ", "
+                + "accessMethod=" + config.get(ACCESS_METHOD) + ", "
                 + "timeZone=" + "Asia/Shanghai" + ", "
                 + "useCopy=" + config.get(USE_COPY) + ", "
                 + "targetSchema=" + config.get(TARGET_SCHEMA) + ", "
@@ -473,6 +504,7 @@ public class AdbpgOptions {
         validateIntegerConfigOption(config, MAX_RETRY_TIMES);
         validateIntegerConfigOption(config, CONNECTION_MAX_ACTIVE);
         validateStringEnumConfigOption(config, CONFLICT_MODE, ConflictMode.stringList());
+        validateStringEnumConfigOption(config, ACCESS_METHOD, AccessMethod.stringList());
         validateIntegerEnumConfigOption(config, USE_COPY, ZeroOrOneEnum.integerList());
         validateStringConfigOption(config, TARGET_SCHEMA);
         validateStringEnumConfigOption(config, EXCEPTION_MODE, ExceptionMode.stringList());

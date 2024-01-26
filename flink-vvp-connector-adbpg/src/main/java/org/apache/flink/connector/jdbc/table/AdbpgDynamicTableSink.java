@@ -11,6 +11,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.types.RowKind;
 import java.util.Arrays;
 import java.util.Objects;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.ACCESS_METHOD;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
@@ -113,6 +114,7 @@ public class AdbpgDynamicTableSink implements DynamicTableSink {
                 && Objects.equals(this.config.get(MAX_RETRY_TIMES), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(CONNECTION_MAX_ACTIVE), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(CONFLICT_MODE), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(ACCESS_METHOD), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(USE_COPY), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(TARGET_SCHEMA), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(EXCEPTION_MODE), that.config.get(EXCEPTION_MODE))
