@@ -86,7 +86,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MOD
 public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful, Syncable {
 
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
-    private static volatile boolean existsPrimaryKeys = false;
+    private boolean existsPrimaryKeys = false;
     protected final RowDataSerializer rowDataSerializer;
     private final ReadableConfig config;
     private final String DELETE_WITH_KEY_SQL_TPL = "DELETE FROM %s WHERE %s ";
@@ -461,6 +461,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     public void sync() {
         if (1 == verbose) {
             LOG.info("start to sync " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+            LOG.info("exist primary key mode is " + existsPrimaryKeys);
         }
         // Synchronized mapBuffer or mapBufferWithoutPk according to existsPrimaryKeys
         synchronized (existsPrimaryKeys ? mapBuffer : mapBufferWithoutPk) {
