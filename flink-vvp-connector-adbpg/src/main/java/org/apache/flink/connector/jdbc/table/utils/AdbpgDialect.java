@@ -20,7 +20,6 @@ package org.apache.flink.connector.jdbc.table.utils;
 import org.apache.flink.connector.jdbc.table.sink.AdbpgOutputFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -73,7 +72,9 @@ public class AdbpgDialect implements Serializable {
             String tableName,
             String[] fieldNames,
             String[] uniqueKeyFields,
-            String[] UpdateFields, boolean support_upsert) {
+            String[] UpdateFields,
+            boolean support_upsert,
+            String accessMethod) {
 
         String uniqueColumns =
                 Arrays.stream(uniqueKeyFields)
@@ -83,11 +84,9 @@ public class AdbpgDialect implements Serializable {
                 Arrays.stream(UpdateFields)
                         .map(f -> quoteIdentifier(f) + "=EXCLUDED." + quoteIdentifier(f))
                         .collect(Collectors.joining(", "));
-        String conflictAction = " ON CONFLICT ("
-                + uniqueColumns
-                + ")"
-                + " DO UPDATE SET "
-                + updateClause;
+
+        String conflictAction = " ON CONFLICT (" + uniqueColumns + ")" + ("beam".equalsIgnoreCase(accessMethod) ? " DO UPDATE ALL " : (" DO UPDATE SET " + updateClause));
+
         return getInsertIntoStatement(tableName, fieldNames)
                 + (support_upsert ? conflictAction : "");
     }
@@ -152,8 +151,11 @@ public class AdbpgDialect implements Serializable {
                         .map(this::quoteIdentifier)
                         .collect(Collectors.joining(", "));
         String conflictAction;
-        if ("ignore".equalsIgnoreCase(conflictMode)     /** if conflictmode is not "upsert", use normal copy statement or insert statement */
-                || "strict".equalsIgnoreCase(conflictMode)
+        if ("ignore".equalsIgnoreCase(conflictMode))
+        {
+            conflictAction = "DO on conflict DO nothing";
+        }
+        else if ("strict".equalsIgnoreCase(conflictMode)
                 || "update".equalsIgnoreCase(conflictMode)) {
             conflictAction = "";
         } else {                                          /** if conflictmode is "upsert", use copy-on-conflict statement or insert-on-conflict statement */
