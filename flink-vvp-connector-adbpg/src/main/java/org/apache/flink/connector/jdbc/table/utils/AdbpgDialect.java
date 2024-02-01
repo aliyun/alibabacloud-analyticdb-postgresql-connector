@@ -151,8 +151,11 @@ public class AdbpgDialect implements Serializable {
                         .map(this::quoteIdentifier)
                         .collect(Collectors.joining(", "));
         String conflictAction;
-        if ("ignore".equalsIgnoreCase(conflictMode)     /** if conflictmode is not "upsert", use normal copy statement or insert statement */
-                || "strict".equalsIgnoreCase(conflictMode)
+        if ("ignore".equalsIgnoreCase(conflictMode))
+        {
+            conflictAction = "DO on conflict DO nothing";
+        }
+        else if ("strict".equalsIgnoreCase(conflictMode)
                 || "update".equalsIgnoreCase(conflictMode)) {
             conflictAction = "";
         } else {                                          /** if conflictmode is "upsert", use copy-on-conflict statement or insert-on-conflict statement */
