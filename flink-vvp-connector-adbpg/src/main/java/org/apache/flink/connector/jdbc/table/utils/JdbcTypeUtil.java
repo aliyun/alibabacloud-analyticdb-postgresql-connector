@@ -1,6 +1,7 @@
 
 package org.apache.flink.connector.jdbc.table.utils;
 
+import java.sql.Types;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,39 +58,40 @@ public final class JdbcTypeUtil {
     }
 
     static {
-        HashMap<TypeInformation<?>, Integer> m = new HashMap();
-        m.put(BasicTypeInfo.STRING_TYPE_INFO, 12);
-        m.put(BasicTypeInfo.BOOLEAN_TYPE_INFO, 16);
-        m.put(BasicTypeInfo.BYTE_TYPE_INFO, -6);
-        m.put(BasicTypeInfo.SHORT_TYPE_INFO, 5);
-        m.put(BasicTypeInfo.INT_TYPE_INFO, 4);
-        m.put(BasicTypeInfo.LONG_TYPE_INFO, -5);
-        m.put(BasicTypeInfo.FLOAT_TYPE_INFO, 7);
-        m.put(BasicTypeInfo.DOUBLE_TYPE_INFO, 8);
-        m.put(SqlTimeTypeInfo.DATE, 91);
-        m.put(SqlTimeTypeInfo.TIME, 92);
-        m.put(SqlTimeTypeInfo.TIMESTAMP, 93);
-        m.put(LocalTimeTypeInfo.LOCAL_DATE, 91);
-        m.put(LocalTimeTypeInfo.LOCAL_TIME, 92);
-        m.put(LocalTimeTypeInfo.LOCAL_DATE_TIME, 93);
-        m.put(BasicTypeInfo.BIG_DEC_TYPE_INFO, 3);
-        m.put(PrimitiveArrayTypeInfo.BYTE_PRIMITIVE_ARRAY_TYPE_INFO, -2);
+        HashMap<TypeInformation<?>, Integer> m = new HashMap<>();
+        m.put(BasicTypeInfo.STRING_TYPE_INFO, Types.VARCHAR);
+        m.put(BasicTypeInfo.BOOLEAN_TYPE_INFO, Types.BOOLEAN);
+        m.put(BasicTypeInfo.BYTE_TYPE_INFO, Types.TINYINT);
+        m.put(BasicTypeInfo.SHORT_TYPE_INFO, Types.SMALLINT);
+        m.put(BasicTypeInfo.INT_TYPE_INFO, Types.INTEGER);
+        m.put(BasicTypeInfo.LONG_TYPE_INFO, Types.BIGINT);
+        m.put(BasicTypeInfo.FLOAT_TYPE_INFO, Types.REAL);
+        m.put(BasicTypeInfo.DOUBLE_TYPE_INFO, Types.DOUBLE);
+        m.put(SqlTimeTypeInfo.DATE, Types.DATE);
+        m.put(SqlTimeTypeInfo.TIME, Types.TIME);
+        m.put(SqlTimeTypeInfo.TIMESTAMP, Types.TIMESTAMP);
+        m.put(LocalTimeTypeInfo.LOCAL_DATE, Types.DATE);
+        m.put(LocalTimeTypeInfo.LOCAL_TIME, Types.TIME);
+        m.put(LocalTimeTypeInfo.LOCAL_DATE_TIME, Types.TIMESTAMP);
+        m.put(BasicTypeInfo.BIG_DEC_TYPE_INFO, Types.DECIMAL);
+        m.put(PrimitiveArrayTypeInfo.BYTE_PRIMITIVE_ARRAY_TYPE_INFO, Types.BINARY);
         TYPE_MAPPING = Collections.unmodifiableMap(m);
-        HashMap<Integer, String> names = new HashMap();
-        names.put(12, "VARCHAR");
-        names.put(16, "BOOLEAN");
-        names.put(-6, "TINYINT");
-        names.put(5, "SMALLINT");
-        names.put(4, "INTEGER");
-        names.put(-5, "BIGINT");
-        names.put(6, "FLOAT");
-        names.put(8, "DOUBLE");
-        names.put(1, "CHAR");
-        names.put(91, "DATE");
-        names.put(92, "TIME");
-        names.put(93, "TIMESTAMP");
-        names.put(3, "DECIMAL");
-        names.put(-2, "BINARY");
+
+        HashMap<Integer, String> names = new HashMap<>();
+        names.put(Types.VARCHAR, "VARCHAR");
+        names.put(Types.BOOLEAN, "BOOLEAN");
+        names.put(Types.TINYINT, "TINYINT");
+        names.put(Types.SMALLINT, "SMALLINT");
+        names.put(Types.INTEGER, "INTEGER");
+        names.put(Types.BIGINT, "BIGINT");
+        names.put(Types.FLOAT, "FLOAT");
+        names.put(Types.DOUBLE, "DOUBLE");
+        names.put(Types.CHAR, "CHAR");
+        names.put(Types.DATE, "DATE");
+        names.put(Types.TIME, "TIME");
+        names.put(Types.TIMESTAMP, "TIMESTAMP");
+        names.put(Types.DECIMAL, "DECIMAL");
+        names.put(Types.BINARY, "BINARY");
         SQL_TYPE_NAMES = Collections.unmodifiableMap(names);
     }
 }
