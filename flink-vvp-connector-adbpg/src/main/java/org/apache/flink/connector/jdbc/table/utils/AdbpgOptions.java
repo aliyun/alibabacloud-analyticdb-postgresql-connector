@@ -60,6 +60,18 @@ public class AdbpgOptions {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("The jdbc password.");
+    // using for adbss
+    public static final ConfigOption<String> ADBSSHOST =
+            ConfigOptions.key("adbsshost")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The adbss host.");
+
+    public static final ConfigOption<Integer> ADBSSPORT =
+            ConfigOptions.key("adbssport")
+                    .intType()
+                    .defaultValue(8972)
+                    .withDescription("The adbss port.");
     // common optional options
     public static final ConfigOption<Integer> RETRY_WAIT_TIME =
             ConfigOptions.key("retrywaittime")
@@ -251,6 +263,9 @@ public class AdbpgOptions {
             case "upsert":
             case "2":
                 return WriteMode.upsert;
+            case "merge":
+            case "3":
+                return WriteMode.merge;
             default:
                 throw new IllegalArgumentException(
                         String.format(
@@ -308,7 +323,8 @@ public class AdbpgOptions {
     public enum WriteMode {
         insert,
         copy,
-        upsert;
+        upsert,
+        merge;
 
         public static List<Integer> integerList() {
             return Stream.of(WriteMode.values()).map(Enum::ordinal).collect(Collectors.toList());
@@ -467,6 +483,8 @@ public class AdbpgOptions {
             throw new RuntimeException("invalid fieldNum, get " + fieldNum);
         }
         validateRequiredConfigOptions(config);
+        validateStringConfigOption(config, ADBSSHOST);
+        validateIntegerConfigOption(config, ADBSSPORT);
         validateIntegerConfigOption(config, RETRY_WAIT_TIME);
         validateIntegerConfigOption(config, BATCH_SIZE);
         validateIntegerConfigOption(config, BATCH_WRITE_TIMEOUT_MS);

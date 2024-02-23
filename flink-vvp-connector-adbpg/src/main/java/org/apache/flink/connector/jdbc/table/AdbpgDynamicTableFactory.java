@@ -36,19 +36,6 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         TableSchema tableSchema =
                 TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
         LOG.info("Try to get and validate configuration.");
-        int fieldNum = tableSchema.getFieldCount();
-        String[] fieldNamesStr = new String[fieldNum];
-        for (int i = 0; i < fieldNum; i++) {
-            fieldNamesStr[i] = tableSchema.getFieldName(i).get();
-        }
-        String[] keyFields =
-                tableSchema.getPrimaryKey()
-                        .map(pk -> pk.getColumns().toArray(new String[0]))
-                        .orElse(null);
-        LogicalType[] lts = new LogicalType[fieldNum];
-        for (int i = 0; i < fieldNum; i++) {
-            lts[i] = tableSchema.getFieldDataType(i).get().getLogicalType();
-        }
         AdbpgOptions.validateSink(config, tableSchema);
         LOG.info("Validation passed, adbpg sink created successfully.");
         return new AdbpgDynamicTableSink(config, tableSchema);
@@ -76,6 +63,8 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         optionalOptions.add(AdbpgOptions.BATCH_SIZE);
         optionalOptions.add(AdbpgOptions.BATCH_WRITE_TIMEOUT_MS);
         optionalOptions.add(AdbpgOptions.CONNECTION_MAX_ACTIVE);
+        optionalOptions.add(AdbpgOptions.ADBSSHOST);
+        optionalOptions.add(AdbpgOptions.ADBSSPORT);
         optionalOptions.add(AdbpgOptions.CONFLICT_MODE);
         optionalOptions.add(AdbpgOptions.USE_COPY);
         optionalOptions.add(AdbpgOptions.TARGET_SCHEMA);

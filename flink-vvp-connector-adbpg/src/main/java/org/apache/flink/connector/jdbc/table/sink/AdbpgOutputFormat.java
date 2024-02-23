@@ -24,8 +24,9 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.druid.pool.DruidPooledConnection;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import org.apache.commons.io.Charsets;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.flink.api.common.io.CleanupWhenUnsuccessful;
 import org.apache.flink.api.common.io.RichOutputFormat;
@@ -33,11 +34,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.jdbc.table.metric.MetricUtils;
 import org.apache.flink.connector.jdbc.table.metric.SimpleGauge;
-import org.apache.flink.connector.jdbc.table.utils.AdbpgDialect;
-import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
-import org.apache.flink.connector.jdbc.table.utils.DateUtil;
-import org.apache.flink.connector.jdbc.table.utils.JdbcRowConverter;
-import org.apache.flink.connector.jdbc.table.utils.StringFormatRowConverter;
+import org.apache.flink.connector.jdbc.table.sink.api.*;
+import org.apache.flink.connector.jdbc.table.utils.*;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.shaded.guava30.com.google.common.base.Joiner;
@@ -60,23 +58,8 @@ import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_SIZE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.BATCH_WRITE_TIMEOUT_MS;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CASE_SENSITIVE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONFLICT_MODE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.EXCEPTION_MODE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY_TIMES;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RESERVEMS;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USERNAME;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.USE_COPY;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.VERBOSE;
-import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MODE;
+
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.*;
 
 /**
  * ADBPG sink Implementation.
@@ -85,20 +68,26 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.WRITE_MOD
 public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful, Syncable {
 
     private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
-    private static volatile boolean existsPrimaryKeys = false;
+    private boolean existsPrimaryKeys = false;
     protected final RowDataSerializer rowDataSerializer;
     private final ReadableConfig config;
     private final String DELETE_WITH_KEY_SQL_TPL = "DELETE FROM %s WHERE %s ";
     private final JdbcRowConverter rowConverter;
     private final JdbcRowConverter upsertConverter;
+    private final StreamingServerRowConverter streamingServerRowConverter;
     private final StringFormatRowConverter copyModeRowConverter;
     private final AdbpgDialect adbpgDialect;
     String[] fieldNamesStrs;
-    LogicalType[] lts;
+    LogicalType[] logicalTypes;
     private String url;
+    private String adbssHost;
+    private int adbssPort;
     private String tableName;
     private String userName;
     private String password;
+    private String hostname = null;
+    private int port = 0;
+    private String database = null;
     private Set<String> primaryKeys;
     private List<String> pkFields = new ArrayList<String>();
     private List<Integer> pkIndex = new ArrayList<>();
@@ -124,9 +113,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private long batchWriteTimeout;
     private long lastWriteTime = 0;
     // Use HashMap mapBuffer for data with primary key to preserve order
-    private Map<String, RowData> mapBuffer = new HashMap<>();
+    private final Map<String, RowData> mapBufferWithPk = new HashMap<>();
     // Use HashMap mapBufferWithoutPk for data without primary key
-    private List<RowData> mapBufferWithoutPk = new ArrayList<>();
+    private final List<RowData> mapBufferWithoutPk = new ArrayList<>();
     private String insertClause = "INSERT INTO ";
     private String timeZone = "Asia/Shanghai";
     private long inputCount = 0;
@@ -152,7 +141,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private int writeMode;
     private int verbose;
     //metric
-    private Meter outTps;
+    private Meter outRps;
     private Meter outBps;
     private Counter sinkSkipCounter;
     private SimpleGauge latencyGauge;
@@ -162,11 +151,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             int fieldNum,
             String[] fieldNamesStrs,
             String[] keyFields,
-            LogicalType[] lts,
+            LogicalType[] logicalTypes,
             ReadableConfig config
     ) {
         this.config = config;
         this.url = config.get(URL);
+        this.adbssHost = config.get(ADBSSHOST);
+        this.adbssPort = config.get(ADBSSPORT);
         this.tableName = config.get(TABLE_NAME);
         this.userName = config.get(USERNAME);
         this.password = config.get(PASSWORD);
@@ -183,8 +174,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.verbose = config.get(VERBOSE);
         this.retryWaitTime = config.get(RETRY_WAIT_TIME);
         this.fieldNum = fieldNum;
-        this.lts = lts;
-        this.rowDataSerializer = new RowDataSerializer(this.lts);
+        this.logicalTypes = logicalTypes;
+        this.rowDataSerializer = new RowDataSerializer(this.logicalTypes);
         Joiner joinerOnComma = Joiner.on(",").useForNull("null");
         this.fieldNamesStrs = fieldNamesStrs;
 
@@ -192,18 +183,18 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             this.pkTypes = new LogicalType[keyFields.length];
             for (int i = 0; i < keyFields.length; i++) {
                 pkFields.add(keyFields[i]);
-                int t = 0;
-                for (; t < fieldNamesStrs.length; t++) {
-                    if (keyFields[i].equals(fieldNamesStrs[t])) {
-                        pkIndex.add(t);
+                int j = 0;
+                for (; j < fieldNamesStrs.length; j++) {
+                    if (keyFields[i].equals(fieldNamesStrs[j])) {
+                        pkIndex.add(j);
                         break;
                     }
                 }
-                if (fieldNamesStrs.length == t) {
+                if (fieldNamesStrs.length == j) {
                     throw new RuntimeException("Key cannot found in filenames.");
                 }
                 int keyIdx = Arrays.asList(fieldNamesStrs).indexOf(keyFields[i]);
-                this.pkTypes[i] = lts[keyIdx];
+                this.pkTypes[i] = logicalTypes[keyIdx];
             }
             this.primaryKeys = new HashSet<>(pkFields);
             this.pkConverter = new JdbcRowConverter(pkTypes);
@@ -256,12 +247,12 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     new LogicalType[nonPrimaryFieldNamesStr.length + primaryFieldNamesStr.length];
             int j = 0;
             this.updateStatementFieldIndices = new int[nonPrimaryFieldNamesStr.length + primaryFieldNamesStr.length];
-            for (int i = 0; i < lts.length; ++i) {
+            for (int i = 0; i < logicalTypes.length; ++i) {
                 if (Arrays.asList(this.primaryFieldNamesStr).contains(fieldNamesStrs[i])) {
                     continue;
                 }
                 updateStatementFieldIndices[j] = i;
-                updateStatementFieldTypes[j] = lts[i];
+                updateStatementFieldTypes[j] = logicalTypes[i];
                 j++;
             }
             for (int i = 0; i < primaryFieldNamesStr.length; ++i) {
@@ -271,8 +262,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             }
             this.upsertConverter = new JdbcRowConverter(updateStatementFieldTypes);
         }
-        this.rowConverter = new JdbcRowConverter(lts);
-        this.copyModeRowConverter = new StringFormatRowConverter(lts);
+        this.rowConverter = new JdbcRowConverter(logicalTypes);
+        this.streamingServerRowConverter = new StreamingServerRowConverter(logicalTypes);
+        this.copyModeRowConverter = new StringFormatRowConverter(logicalTypes);
     }
 
     private static String toField(Object o) {
@@ -355,7 +347,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             }
         }, batchWriteTimeout, batchWriteTimeout, TimeUnit.MILLISECONDS);
 
-        outTps = MetricUtils.registerNumRecordsOutRate(getRuntimeContext());
+        outRps = MetricUtils.registerNumRecordsOutRate(getRuntimeContext());
         outBps = MetricUtils.registerNumBytesOutRate(getRuntimeContext(), CONNECTOR_TYPE);
         latencyGauge = MetricUtils.registerCurrentSendTime(getRuntimeContext());
         sinkSkipCounter = MetricUtils.registerNumRecordsOutErrors(getRuntimeContext());
@@ -370,10 +362,10 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         RowData rowData = rowDataSerializer.copy(record);
         inputCount++;
         if (existsPrimaryKeys) {
-            synchronized (mapBuffer) {
+            synchronized (mapBufferWithPk) {
                 // Construct primary key string as map key
                 String dupKey = constructDupKey(rowData, pkIndex);
-                mapBuffer.put(dupKey, rowData);
+                mapBufferWithPk.put(dupKey, rowData);
             }
         } else {
             synchronized (mapBufferWithoutPk) {
@@ -396,7 +388,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 dupKey += "null#";
                 continue;
             }
-            LogicalType t = lts[i];
+            LogicalType t = logicalTypes[i];
             String valuestr;
             if (t instanceof BooleanType) {
                 boolean value = row.getBoolean(i);
@@ -457,14 +449,14 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
     public void sync() {
         if (1 == verbose) {
-            LOG.info("start to sync " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+            LOG.info("start to sync " + (mapBufferWithPk.size() + mapBufferWithoutPk.size()) + " records.");
         }
         // Synchronized mapBuffer or mapBufferWithoutPk according to existsPrimaryKeys
-        synchronized (existsPrimaryKeys ? mapBuffer : mapBufferWithoutPk) {
+        synchronized (existsPrimaryKeys ? mapBufferWithPk : mapBufferWithoutPk) {
             List<RowData> addBuffer = new ArrayList<>();
             List<RowData> deleteBuffer = new ArrayList<>();
-            Collection<RowData> buffer = existsPrimaryKeys ? mapBuffer.values() : mapBufferWithoutPk;
-            if (buffer.size() > 0) {
+            Collection<RowData> buffer = existsPrimaryKeys ? mapBufferWithPk.values() : mapBufferWithoutPk;
+            if (!buffer.isEmpty()) {
                 for (RowData row : buffer) {
                     switch (row.getRowKind()) {
                         case INSERT:
@@ -480,20 +472,21 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                                     "Not supported row kind " + row.getRowKind());
                     }
                 }
-                batchWrite(addBuffer);
-                if (deleteBuffer.size() > 0) {
+                batchAdd(addBuffer);
+
+                if (!deleteBuffer.isEmpty()) {
                     if (existsPrimaryKeys) {
-                        batchDelete(deleteBuffer);
+                        batchDeleteWithPK(deleteBuffer);
                     } else {
                         batchDeleteWithoutPk(deleteBuffer);
                     }
                 }
             }
             if (1 == verbose) {
-                LOG.info("finished syncing " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+                LOG.info("finished syncing " + (mapBufferWithPk.size() + mapBufferWithoutPk.size()) + " records.");
             }
             // Clear mapBuffer and mapBufferWithoutPk
-            mapBuffer.clear();
+            mapBufferWithPk.clear();
             mapBufferWithoutPk.clear();
             inputCount = 0;
             lastWriteTime = System.currentTimeMillis();
@@ -504,8 +497,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         if (latencyGauge != null) {
             latencyGauge.report(end - start, rows.size());
         }
-        if (outTps != null) {
-            outTps.markEvent(rows.size());
+        if (outRps != null) {
+            outRps.markEvent(rows.size());
         }
         if (outBps != null) {
             outBps.markEvent(bps);
@@ -542,12 +535,12 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 String sql =
                         adbpgDialect.getDeleteStatementWithNull(tableName, fieldNamesStrs, nullFieldsIndex);
 
-                if (nullFieldsIndex.size() > 0) {
+                if (!nullFieldsIndex.isEmpty()) {
                     LogicalType[] types = new LogicalType[rowData.getArity() - nullFieldsIndex.size()];
                     GenericRowData param = new GenericRowData(rowData.getArity() - nullFieldsIndex.size());
                     for (int i = 0, j = 0; i < rowData.getArity(); ++i) {
                         if (!nullFieldsIndex.contains(i)) {
-                            types[j] = lts[i];
+                            types[j] = logicalTypes[i];
                             param.setField(
                                     j, RowData.createFieldGetter(types[j], i).getFieldOrNull(rowData));
                             j++;
@@ -565,7 +558,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
     }
 
-    private void batchDelete(List<RowData> buffers) {
+    private void batchDeleteWithPK(List<RowData> buffers) {
         String sql = adbpgDialect.getDeleteStatement(tableName, pkFields.toArray(new String[0]));
         try {
             executeSqlWithPrepareStatement(sql, buffers, this.pkConverter, true);
@@ -576,7 +569,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     }
 
     /**
-     * The core logic of writing data to the database. Use batch write logic first which can maximizes the writing performance
+     * The router of writing method to the database. Use batch write logic first which can maximizes the writing performance
      * and if batch write logic failed, will use row by row write logic with the preset 'conflict mode'.
      * There are 3 write modes for now:
      *      0. insert mode: use 'insert into' command to write data to the database.
@@ -585,9 +578,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
      *      2. upsert mode: use 'insert on conflict' command to write data to the database.
      * @param rows
      */
-    private void batchWrite(List<RowData> rows) {
+    private void batchAdd(List<RowData> rows) {
         long bps = 0;
-        if (null == rows || rows.size() == 0) {
+        if (null == rows || rows.isEmpty()) {
             return;
         }
         try {
@@ -612,45 +605,50 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             } else if (writeMode == 0) {            /** batch insert */
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStrs);
                 executeSqlWithPrepareStatement(insertSql, rows, rowConverter, false);
+            } else if (writeMode == 3) {            /** merge with streaming server api */
+                executeMergeWithStreamingServer(rows, streamingServerRowConverter, false);
             } else {
                 LOG.error("Unsupported write mode: " + writeMode);
                 System.exit(255);
             }
             closeConnection();
         } catch (Exception e) {
+            Exception exception = e;
+
             boolean isDuplicateKeyException =
-                    (e.getMessage().contains("duplicate key") && e.getMessage().contains("violates unique constraint"))    // duplicate key on copy statement
-                    || e.getMessage().contains("ON CONFLICT DO UPDATE");                                                   // duplicate key on copy on conflict statement
+                    exception.getMessage() != null
+                            && (exception.getMessage().contains("duplicate key") && exception.getMessage().contains("violates unique constraint"))    // duplicate key on copy statement
+                            || exception.getMessage().contains("ON CONFLICT DO UPDATE");                                                   // duplicate key on copy on conflict statement
             if (isDuplicateKeyException) {
                 LOG.warn("Batch write failed with duplicate-key exception, will retry with preset conflict-mode.");
             } else {
-                LOG.warn("Batch write failed with exception will retry with preset conflict action. The exception is:", e);
+                LOG.warn("Batch write failed with exception will retry with preset conflict action. The exception is:", exception);
             }
 
             // Batch upsert demotes to single upsert when conflictMode='upsert' or writeMode=2
             // note that exception generated by prepared statement stack have one extra layer
             for (RowData row : rows) {
                 // note that exception generated by prepared statement stack have one extra layer
-                if (e instanceof BatchUpdateException) {
-                    e = ((BatchUpdateException) e).getNextException();
+                if (exception instanceof BatchUpdateException) {
+                    exception = ((BatchUpdateException) exception).getNextException();
                 }
 
                 if (isDuplicateKeyException) {
-                    if ("strict".equalsIgnoreCase(conflictMode)) {                    // conflictMode = 'strict', report error without any action
+                    if ("strict".equalsIgnoreCase(conflictMode)) {                    /** conflictMode = 'strict', report error without any action */
                         throw new RuntimeException("duplicate key value violates unique constraint");
-                    } else if ("upsert".equalsIgnoreCase(conflictMode)) {             // conflictMode = 'upsert', use upsert sql
+                    } else if ("upsert".equalsIgnoreCase(conflictMode)) {             /** conflictMode = 'upsert', use upsert sql */
                         LOG.warn("Retrying to replace record with upsert.");
                         upsertRow(row);
                     } else if ("ignore".equalsIgnoreCase(conflictMode)) {
                         LOG.warn("Batch write failed, because preset conflictmode is 'ignore', connector will skip this row");
-                    } else {                                                            // conflictMode = 'update' or any other string, use update sql
+                    } else {                                                           /** conflictMode = 'update' or any other string, use update sql */
                         updateRow(row);
                     }
                 } else {
                     // exceptionMode only have "strict" and "ignore", if this is "ignore" return directly without report an expection
                     if ("strict".equalsIgnoreCase(exceptionMode)) {
                         LOG.warn("Found unexpect exception, will ignore this row.");
-                        throw new RuntimeException(e);
+                        throw new RuntimeException(exception);
                     }
                 }
             }
@@ -683,6 +681,134 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
     }
 
+    public static Session buildSession(GpssGrpc.GpssBlockingStub bStub, String gpMasterHost, int gpMasterPort,
+                                       String gpRoleName, String gpPasswd, String dbname) {
+
+        /** create a connect request builder */
+        LOG.info("Starting create adbss session...");
+        ConnectRequest connReq = ConnectRequest.newBuilder()
+                .setHost(gpMasterHost)
+                .setPort(gpMasterPort)
+                .setUsername(gpRoleName)
+                .setPassword(gpPasswd)
+                .setDB(dbname)
+                .setUseSSL(false)
+                .build();
+
+        assert bStub != null;
+
+        return bStub.connect(connReq);
+    }
+
+    public void openForMerge(GpssGrpc.GpssBlockingStub bStub, Session mSession, String schemaName, String tableName) {
+        /** open a table for write */
+        // create an insert option builder
+        MergeOption.Builder mBuilder = MergeOption.newBuilder();
+
+
+        for (String pk: primaryFieldNamesStr) {
+            mBuilder.addInsertColumns(pk);
+            mBuilder.addMatchColumns(pk);
+        }
+        for (String nonPk: nonPrimaryFieldNamesStr) {
+            mBuilder.addInsertColumns(nonPk);
+            mBuilder.addUpdateColumns(nonPk);
+        }
+        // TODO MergeOption.Builder.setCondition,  MergeOption.Builder.setErrorLimit, MergeOption.Builder.setErrorLimitPercentage
+//        mBuilder.setErrorLimitCount();
+//        mBuilder.setErrorLimitPercentage();
+//        mBuilder.setCondition();
+
+        MergeOption mOpt = mBuilder.build();
+
+        // create an open request builder
+        OpenRequest oReq = OpenRequest.newBuilder()
+                .setSession(mSession)
+                .setSchemaName(schemaName)
+                .setTableName(tableName)
+                //.setPreSQL("")
+                //.setPostSQL("")
+                //.setEncoding("")
+                //.setStagingSchema("")
+                .setMergeOption(mOpt)
+                .build();
+
+        // use the blocking stub to call the Open service; it returns nothing
+        bStub.open(oReq);
+    }
+
+    private void executeMergeWithStreamingServer(List<RowData> rows, StreamingServerRowConverter rowDataConverter, boolean del) throws InterruptedException {
+        long start = System.currentTimeMillis();
+        int retryTime = 0;
+        while(retryTime++ < maxRetryTime) {
+            ManagedChannel channel = null;
+            GpssGrpc.GpssBlockingStub bStub = null;
+            Session mSession = null;
+            long bps = 0;
+            try {
+                // check if hostname and port are already set
+                if (database == null && hostname == null && port == 0) {
+                    extractParametersWithURL(url);
+                }
+
+                // connect to ADBSS gRPC service instance; create a channel and a blocking stub
+                channel = ManagedChannelBuilder.forAddress(adbssHost, adbssPort).usePlaintext().build();
+                bStub = GpssGrpc.newBlockingStub(channel);
+                // use the blocking stub to call the Connect service
+                mSession = buildSession(bStub, hostname, port, userName, password, database);
+                LOG.info("Got streaming server session id:" + mSession.getID());
+                // setup column names and use blocking stub to call the Open service
+                openForMerge(bStub, mSession, targetSchema, tableName);
+
+                //put Flink-RowData into Adbss-RowData
+                List<org.apache.flink.connector.jdbc.table.sink.api.RowData> ssRows = new ArrayList<>();
+                for (RowData row : rows) {
+                    if (existsPrimaryKeys && del) {
+                        bps += rowDataConverter.toExternal(row, ssRows);
+                    } else {
+                        bps += rowDataConverter.toExternal(row, ssRows);
+                    }
+                }
+
+                /** create a write request builder */
+                WriteRequest wReq = WriteRequest.newBuilder()
+                        .setSession(mSession)
+                        .addAllRows(ssRows)
+                        .build();
+
+                // use the blocking stub to call the Write service; it returns nothing
+                LOG.info("Start writing row data with adbss...");
+                bStub.write(wReq);
+                LOG.info("Finished writing row data with adbss...");
+
+                /** create a close request builder */
+                TransferStats tStats;
+                CloseRequest cReq = CloseRequest.newBuilder()
+                        .setSession(mSession)
+                        //.setMaxErrorRows(15)
+                        //.setAbort(true)
+                        .build();
+                /** use the blocking stub to call the Close service */
+                tStats = bStub.close(cReq);
+                /** display the result to stdout */
+                LOG.info("CloseRequest tStats: " + tStats.toString());
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                assert bStub != null;
+                assert mSession != null;
+                /** use the blocking stub to call the Disconnect service */
+                LOG.info("Disconnecting adbss with sessionID " + mSession.getID() + " ...");
+                bStub.disconnect(mSession);
+
+                // shutdown the channel
+                channel.shutdown().awaitTermination(7, TimeUnit.SECONDS);
+            }
+            long end = System.currentTimeMillis();
+            reportMetric(rows, start, end, bps);
+        }
+    }
     private void executeSqlWithPrepareStatement(
             String sql, List<RowData> valueList, JdbcRowConverter rowDataConverter, boolean del) throws SQLException {
         long start = System.currentTimeMillis();
@@ -890,4 +1016,59 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         sync();
         LOG.info("finished waiting");
     }
+
+    public static String extractDatabaseName(String jdbcUrl) {
+        // check if jdbcUrl is empty
+        if (jdbcUrl == null || jdbcUrl.isEmpty()) {
+            return null;
+        }
+
+        // try to split with given url
+        String[] parts = jdbcUrl.split("/");
+        // database name should be the last part
+        if (parts.length > 0) {
+            String lastPart = parts[parts.length - 1];
+            // if there are parameters in url like '?', then these should be removed
+            int paramsIndex = lastPart.indexOf('?');
+            if (paramsIndex != -1) {
+                return lastPart.substring(0, paramsIndex);
+            } else {
+                return lastPart;
+            }
+        }
+        return null;
+    }
+
+    public void extractParametersWithURL(String jdbcUrl) {
+        // check if jdbcUrl is empty
+        if (jdbcUrl == null || jdbcUrl.isEmpty()) {
+            throw new RuntimeException("Invalid jdbc url, can't extract hostname and port with empty url");
+        }
+
+        // extract database with the given url
+        String[] parts = jdbcUrl.split("/");
+        if (parts.length > 0) {                         // database name should be the last part
+            String lastPart = parts[parts.length - 1];
+            int paramsIndex = lastPart.indexOf('?');    // if there are parameters in url like '?', then these should be removed
+            if (paramsIndex != -1) {
+                database =  lastPart.substring(0, paramsIndex);
+            } else {
+                database = lastPart;
+            }
+        }
+
+        // extract hostname and port with the given url
+        parts = jdbcUrl.split("//");                // assume that URL follow a regular format：jdbc:database_type://hostname:port/database_name
+        String hostAndPort = parts[1].split("/")[0];
+        String[] hostPortParts = hostAndPort.split(":");
+        // normally the length of hostPortParts should only be 2
+        if (hostPortParts.length != 2) {
+            throw new RuntimeException("Invalid jdbc url, can't extract hostname and port with url: " + jdbcUrl);
+        }
+        // extract hostname
+        hostname = hostAndPort.split(":")[0];
+        port = Integer.parseInt(hostAndPort.split(":")[1]);
+    }
 }
+
+
