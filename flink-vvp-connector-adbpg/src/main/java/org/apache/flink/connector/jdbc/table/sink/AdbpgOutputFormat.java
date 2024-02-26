@@ -67,8 +67,8 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.*;
  */
 public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements CleanupWhenUnsuccessful, Syncable {
 
-    private static final transient Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
-    private boolean existsPrimaryKeys = false;
+    private static final Logger LOG = LoggerFactory.getLogger(AdbpgOutputFormat.class);
+    private boolean existsPrimaryKeys;
     protected final RowDataSerializer rowDataSerializer;
     private final ReadableConfig config;
     private final String DELETE_WITH_KEY_SQL_TPL = "DELETE FROM %s WHERE %s ";
@@ -321,7 +321,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
-            if (checkPartition()) {     // check if table is partition table, if it is true, we shouldn't use upsert statement.
+            if (checkPartition() && writeMode == 1) {     // check the target table is partitioned, if it is true, we shouldn't use upsert statement.
                 support_upsert = false;
             }
             rawConn = (DruidPooledConnection) connection;
