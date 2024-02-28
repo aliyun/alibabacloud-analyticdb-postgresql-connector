@@ -332,7 +332,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
-            if (checkPartition()) {     // check if table is partition table, if it is true, we shouldn't use upsert statement.
+            if (checkPartition() && writeMode == 1) {    // check if table is partition table, if it is true, we shouldn't use upsert statement.
                 support_upsert = false;
             }
             rawConn = (DruidPooledConnection) connection;
