@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,8 @@ import org.apache.flink.connector.jdbc.table.utils.AdbpgOptions;
 import org.apache.flink.connector.jdbc.table.utils.DateUtil;
 import org.apache.flink.connector.jdbc.table.utils.JdbcRowConverter;
 import org.apache.flink.connector.jdbc.table.utils.StringFormatRowConverter;
+import org.apache.flink.connector.jdbc.table.utils.hash.util.JdbcTypes;
+import org.apache.flink.connector.jdbc.table.utils.hash.GreenplumCdbHash;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.shaded.guava30.com.google.common.base.Joiner;
@@ -71,6 +74,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RESERVEMS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.SHARD_COUNT;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
@@ -124,9 +128,11 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private int batchSize;
     private long batchWriteTimeout;
     private long lastWriteTime = 0;
+    // Use TreeMap treeMapBuffer for data with primary key to distinct key and reorder data
+    private Map<String, RowData> treeMapBuffer = new TreeMap<>();
     // Use HashMap mapBuffer for data with primary key to preserve order
     private Map<String, RowData> mapBuffer = new HashMap<>();
-    // Use HashMap mapBufferWithoutPk for data without primary key
+    // Use List mapBufferWithoutPk for data without primary key
     private List<RowData> mapBufferWithoutPk = new ArrayList<>();
     private String insertClause = "INSERT INTO ";
     private String timeZone = "Asia/Shanghai";
@@ -147,6 +153,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private boolean reserveMs;
     private String conflictMode;
     private String accessMethod;
+    private int shardCount;
     private int useCopy;
     private String targetSchema;
     private String exceptionMode;
@@ -176,6 +183,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.reserveMs = AdbpgOptions.isConfigOptionTrue(config, RESERVEMS);
         this.conflictMode = config.get(CONFLICT_MODE);
         this.accessMethod = config.get(ACCESS_METHOD);
+        this.shardCount = config.get(SHARD_COUNT);
         this.useCopy = config.get(USE_COPY);
         this.maxRetryTime = config.get(MAX_RETRY_TIMES);
         this.batchSize = config.get(BATCH_SIZE);
@@ -372,7 +380,15 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
         RowData rowData = rowDataSerializer.copy(record);
         inputCount++;
-        if (existsPrimaryKeys) {
+        if (existsPrimaryKeys && shardCount >0 )
+        {
+            synchronized (treeMapBuffer) {
+                // Construct primary key string as map key
+                String dupKey = constructDupKey(rowData, pkIndex);
+                treeMapBuffer.put(dupKey, rowData);
+            }
+        }
+        else if (existsPrimaryKeys) {
             synchronized (mapBuffer) {
                 // Construct primary key string as map key
                 String dupKey = constructDupKey(rowData, pkIndex);
@@ -387,6 +403,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
         if (inputCount >= batchSize) {
             sync();
+            LOG.info("current input count: " + inputCount);
         } else if (System.currentTimeMillis() - this.lastWriteTime > this.batchWriteTimeout) {
             sync();
         }
@@ -432,6 +449,72 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         return dupKey;
     }
 
+    private int getShardId(RowData row, List<Integer> pkIndex) {
+        int nKeys;
+        int j = 0;
+        int shardId;
+        nKeys = pkIndex.size();
+        String[] values = new String[nKeys];
+        int[] nulls = new int[nKeys];
+        int[] types = new int[nKeys];
+
+        for (int i : pkIndex) {
+            if (row.isNullAt(i)) {
+                nulls[j] = 1;
+                continue;
+            }
+
+            LogicalType t = lts[i];
+
+            nulls[j] = 0;
+
+            if (t instanceof BooleanType) {
+                boolean value = row.getBoolean(i);
+                values[j] = value ? "'true'" : "'false'";
+                types[j] = JdbcTypes.BOOLEAN;
+            } else if (t instanceof TimestampType) {
+                Timestamp value = row.getTimestamp(i, 8).toTimestamp();
+                values[j] = DateUtil.timeStamp2String((Timestamp) value, timeZone, reserveMs);
+                types[j] = JdbcTypes.TIMESTAMP;
+            } else if (t instanceof VarCharType || t instanceof CharType) {
+                values[j] = row.getString(i).toString();
+                types[j] = JdbcTypes.VARCHAR;
+            } else if (t instanceof FloatType) {
+                values[j] = row.getFloat(i) + "";
+                types[j] = JdbcTypes.FLOAT;
+            } else if (t instanceof DoubleType) {
+                values[j] = row.getDouble(i) + "";
+                types[j] = JdbcTypes.DOUBLE;
+            } else if (t instanceof IntType) {
+                values[j] = row.getInt(i) + "";
+                types[j] = JdbcTypes.INTEGER;
+            } else if (t instanceof SmallIntType) {
+                values[j] = row.getShort(i) + "";
+                types[j] = JdbcTypes.INTEGER;
+            } else if (t instanceof TinyIntType) {
+                values[j] = row.getByte(i) + "";
+                types[j] = JdbcTypes.INTEGER;
+            } else if (t instanceof BigIntType) {
+                values[j] = row.getLong(i) + "";
+                types[j] = JdbcTypes.BIGINT;
+            } else if (t instanceof DecimalType) {
+                DecimalType dt = (DecimalType) t;
+                values[j] = row.getDecimal(i, dt.getPrecision(), dt.getScale()).toString();
+                types[j] = JdbcTypes.DECIMAL;
+            } else {
+                throw new RuntimeException("unsupported data type:" + t.toString() + ", please contact developer:wangheyang.why@alibaba-inc.com");
+            }
+            j++;
+        }
+
+        shardId = GreenplumCdbHash.getTargetSegmentId(values, nulls, types, nKeys, shardCount);
+        if (LOG.isDebugEnabled()) {
+            String dupKey = constructDupKey(row, pkIndex);
+            LOG.debug("current row shard id is " + shardId + ", primary key is " + dupKey);
+        }
+        return shardId;
+    }
+
     @Override
     public void close() throws IOException {
         sync();
@@ -460,47 +543,106 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
     public void sync() {
         if (1 == verbose) {
-            LOG.info("start to sync " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
-            LOG.info("exist primary key mode is " + existsPrimaryKeys);
+            LOG.info("start to sync " + (treeMapBuffer.size() + mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+            LOG.info("exist primary key mode is " + existsPrimaryKeys + ". shard count is " + shardCount);
         }
-        // Synchronized mapBuffer or mapBufferWithoutPk according to existsPrimaryKeys
-        synchronized (existsPrimaryKeys ? mapBuffer : mapBufferWithoutPk) {
-            List<RowData> addBuffer = new ArrayList<>();
-            List<RowData> deleteBuffer = new ArrayList<>();
-            Collection<RowData> buffer = existsPrimaryKeys ? mapBuffer.values() : mapBufferWithoutPk;
-            if (buffer.size() > 0) {
-                for (RowData row : buffer) {
-                    switch (row.getRowKind()) {
-                        case INSERT:
-                        case UPDATE_AFTER:
-                            addBuffer.add(row);
-                            break;
-                        case DELETE:
-                        case UPDATE_BEFORE:
-                            deleteBuffer.add(row);
-                            break;
-                        default:
-                            throw new RuntimeException(
-                                    "Not supported row kind " + row.getRowKind());
+        if (existsPrimaryKeys && shardCount > 0) {
+            synchronized (treeMapBuffer) {
+                Map<Integer, List<RowData>> addBufferMap = new HashMap<>();
+                Map<Integer, List<RowData>> deleteBufferMap = new HashMap<>();
+
+                if (treeMapBuffer.size() > 0) {
+                    // Init pre-hashed buffer
+                    for (int i = 0; i < shardCount; i++) {
+                        List<RowData> addBuffer = new ArrayList<>();
+                        List<RowData> deleteBuffer = new ArrayList<>();
+                        addBufferMap.put(i, addBuffer);
+                        deleteBufferMap.put(i, deleteBuffer);
+                    }
+
+                    treeMapBuffer.forEach((key, value) -> {
+                        int shard = getShardId(value, pkIndex);
+
+                        switch (value.getRowKind()) {
+                            case INSERT:
+                            case UPDATE_AFTER:
+                                addBufferMap.get(shard).add(value);
+                                break;
+                            case DELETE:
+                            case UPDATE_BEFORE:
+                                deleteBufferMap.get(shard).add(value);
+                                break;
+                            default:
+                                throw new RuntimeException(
+                                        "Not supported row kind " + value.getRowKind());
+                        }
+                    });
+
+                    for (int i = 0; i < shardCount; i++) {
+                        if (deleteBufferMap.get(i).size() > 0) {
+                            batchDelete(deleteBufferMap.get(i));
+                        }
+                        batchWrite(addBufferMap.get(i));
                     }
                 }
-                batchWrite(addBuffer);
-                if (deleteBuffer.size() > 0) {
-                    if (existsPrimaryKeys) {
-                        batchDelete(deleteBuffer);
-                    } else {
-                        batchDeleteWithoutPk(deleteBuffer);
-                    }
+
+                if (1 == verbose) {
+                    LOG.info("finished syncing " + (treeMapBuffer.size() + mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
                 }
+
+                // Clear treeMapBuffer, mapBuffer and mapBufferWithoutPk
+                treeMapBuffer.clear();
+                mapBuffer.clear();
+                mapBufferWithoutPk.clear();
+                inputCount = 0;
+                lastWriteTime = System.currentTimeMillis();
             }
-            if (1 == verbose) {
-                LOG.info("finished syncing " + (mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+        }
+        else {
+            // Synchronized mapBuffer or mapBufferWithoutPk according to existsPrimaryKeys
+            synchronized (existsPrimaryKeys ? mapBuffer : mapBufferWithoutPk) {
+                List<RowData> addBuffer = new ArrayList<>();
+                List<RowData> deleteBuffer = new ArrayList<>();
+                Collection<RowData> buffer = existsPrimaryKeys ? mapBuffer.values() : mapBufferWithoutPk;
+                if (buffer.size() > 0) {
+                    for (RowData row : buffer) {
+                        switch (row.getRowKind()) {
+                            case INSERT:
+                            case UPDATE_AFTER:
+                                addBuffer.add(row);
+                                break;
+                            case DELETE:
+                            case UPDATE_BEFORE:
+                                deleteBuffer.add(row);
+                                break;
+                            default:
+                                throw new RuntimeException(
+                                        "Not supported row kind " + row.getRowKind());
+                        }
+                    }
+
+                    // delete before insert.
+                    if (deleteBuffer.size() > 0) {
+                        if (existsPrimaryKeys) {
+                            batchDelete(deleteBuffer);
+                        }
+                        else {
+                            batchDeleteWithoutPk(deleteBuffer);
+                        }
+                    }
+                    batchWrite(addBuffer);
+                }
+                if (1 == verbose) {
+                    LOG.info("finished syncing " + (treeMapBuffer.size() + mapBuffer.size() + mapBufferWithoutPk.size()) + " records.");
+                }
+
+                // Clear treeMapBuffer, mapBuffer and mapBufferWithoutPk
+                treeMapBuffer.clear();
+                mapBuffer.clear();
+                mapBufferWithoutPk.clear();
+                inputCount = 0;
+                lastWriteTime = System.currentTimeMillis();
             }
-            // Clear mapBuffer and mapBufferWithoutPk
-            mapBuffer.clear();
-            mapBufferWithoutPk.clear();
-            inputCount = 0;
-            lastWriteTime = System.currentTimeMillis();
         }
     }
 

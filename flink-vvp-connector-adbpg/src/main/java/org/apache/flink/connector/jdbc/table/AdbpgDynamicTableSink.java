@@ -22,6 +22,7 @@ import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.MAX_RETRY
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.PASSWORD;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RESERVEMS;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.RETRY_WAIT_TIME;
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.SHARD_COUNT;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TABLE_NAME;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.TARGET_SCHEMA;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.URL;
@@ -115,6 +116,7 @@ public class AdbpgDynamicTableSink implements DynamicTableSink {
                 && Objects.equals(this.config.get(CONNECTION_MAX_ACTIVE), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(CONFLICT_MODE), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(ACCESS_METHOD), that.config.get(TABLE_NAME))
+                && Objects.equals(this.config.get(SHARD_COUNT), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(USE_COPY), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(TARGET_SCHEMA), that.config.get(TABLE_NAME))
                 && Objects.equals(this.config.get(EXCEPTION_MODE), that.config.get(EXCEPTION_MODE))

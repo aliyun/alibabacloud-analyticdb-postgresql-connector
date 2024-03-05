@@ -1,0 +1,78 @@
+package org.apache.flink.connector.jdbc.table.utils.hash.util;
+
+public class JdbcTypes {
+    public static final int X_MYSQL_BITS = -14;
+    public static final String MYSQL_BITS = "BIT";
+    public static final int X_MYSQL_JSON = -17;
+    public static final String MYSQL_JSON = "JSON";
+    public static final int X_MYSQL_GEOMETRY = -18;
+    public static final String MYSQL_GEOMETRY = "GEOMETRY";
+    public static final int X_MYSQL_TINYINT = -12;
+    public static final String MYSQL_TINYINT_1 = "TINYINT";
+    public static final String MYSQL_TINYINT_UNSIGNED_1 = "TINYINT UNSIGNED";
+    public static final String MYSQL_TINY_TEXT = "TINYTEXT";
+    public static final int BIT = -7;
+    public static final int BIGINT = -5;
+    public static final int TINYINT = -6;
+    public static final int SMALLINT = 5;
+    public static final int INTEGER = 4;
+    public static final int BOOLEAN = 16;
+    public static final int FLOAT = 7;
+    public static final int REAL = 6;
+    public static final int DOUBLE = 8;
+    public static final int BINARY_FLOAT = 100;
+    public static final int BINARY_DOUBLE = 101;
+    public static final int DECIMAL = 3;
+    public static final int NUMERIC = 2;
+    public static final int X_MYSQL_YEAR = 90;
+    public static final String MYSQL_YEAR = "YEAR";
+    public static final int DATE = 91;
+    public static final int TIME = 92;
+    public static final int TIMESTAMP = 93;
+    public static final int X_MYSQL_DATETIME = 94;
+    public static final String MYSQL_DATETIME = "DATETIME";
+    public static final String DATETIME_NAME = "DATETIME";
+    public static final int DATETIME = 94;
+    public static final int TIMESTAMPLOCALZONE = -102;
+    public static final int TIMESTAMPTIMEZONE = -101;
+    public static final int CHAR = 1;
+    public static final int VARCHAR = 12;
+    public static final int LONGNVARCHAR = -16;
+    public static final int LONGVARCHAR = -1;
+    public static final String LONG_NAME = "LONG";
+    public static final int CLOB = 2005;
+    public static final int BINARY = -2;
+    public static final int VARBINARY = -3;
+    public static final int BLOB = 2004;
+    public static final int LONGVARBINARY = -4;
+    public static final int INTERVALDS = -104;
+    public static final int INTERVALYM = -103;
+    public static final int BFILE = -13;
+    public static final int NCHAR = -15;
+    public static final int NVARCHAR2 = -9;
+    public static final int NCLOB = 2011;
+    public static final int ROWID = -8;
+    public static final int POSTGRESQL_XTYPES = 1111;
+    public static final int XML = 2009;
+    public static final int DATETIMEOFFSET = -155;
+    public static final int SQLSERVER_SQL_VARIANT = -156;
+    public static final int SQLSERVER_GEOMETRY = -157;
+    public static final int SQLSERVER_GEOGRAPHY = -158;
+    public static final int POSTGRESQL_COMPOSITE = 2002;
+    public static final int POSTGRESQL_ARRAY = 2003;
+    public static final int X_POSTGRESQL_BOOL = -190;
+    public static final String POSTGRESQL_BOOL = "bool";
+    public static final int X_POSTGRESQL_MONEY = -191;
+    public static final String POSTGRESQL_MONEY = "money";
+    public static final int X_POSTGRESQL_CUSTOM_TYPE = 2002;
+    public static final int POSTGRESQL_GEOMETRY = 1110;
+    public static final int SQL_SERVER_2005_TIMESTAMP = -151;
+    public static final int SQL_SERVER_2005_SMALLDATETIME = -150;
+    public static final int SQL_SERVER_2005_MONEY = -148;
+    public static final int SQL_SERVER_2005_SMALLMONEY = -146;
+    public static final int DECFLOAT = 1111;
+    public static final int X_OBJECT = -2019;
+
+    public JdbcTypes() {
+    }
+}

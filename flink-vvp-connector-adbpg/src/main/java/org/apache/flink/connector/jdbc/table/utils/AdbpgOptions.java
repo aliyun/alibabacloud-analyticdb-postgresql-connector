@@ -113,6 +113,12 @@ public class AdbpgOptions {
                     .stringType()
                     .defaultValue("heap")
                     .withDescription("access method and storage type of current table.");
+
+    public static final ConfigOption<Integer> SHARD_COUNT =
+            ConfigOptions.key("shardcount")
+                    .intType()
+                    .defaultValue(0)
+                    .withDescription("shard count of the table.");
     public static final ConfigOption<Integer> USE_COPY =
             ConfigOptions.key("usecopy")
                     .intType()
@@ -413,6 +419,7 @@ public class AdbpgOptions {
                 + "batchWriteTimeoutMs=" + config.get(BATCH_WRITE_TIMEOUT_MS) + ", "
                 + "conflictMode=" + config.get(CONFLICT_MODE) + ", "
                 + "accessMethod=" + config.get(ACCESS_METHOD) + ", "
+                + "shardCount=" + config.get(SHARD_COUNT) + ", "
                 + "timeZone=" + "Asia/Shanghai" + ", "
                 + "useCopy=" + config.get(USE_COPY) + ", "
                 + "targetSchema=" + config.get(TARGET_SCHEMA) + ", "
@@ -503,6 +510,7 @@ public class AdbpgOptions {
         validateIntegerConfigOption(config, BATCH_WRITE_TIMEOUT_MS);
         validateIntegerConfigOption(config, MAX_RETRY_TIMES);
         validateIntegerConfigOption(config, CONNECTION_MAX_ACTIVE);
+        validateIntegerConfigOption(config, SHARD_COUNT);
         validateStringEnumConfigOption(config, CONFLICT_MODE, ConflictMode.stringList());
         validateStringEnumConfigOption(config, ACCESS_METHOD, AccessMethod.stringList());
         validateIntegerEnumConfigOption(config, USE_COPY, ZeroOrOneEnum.integerList());
