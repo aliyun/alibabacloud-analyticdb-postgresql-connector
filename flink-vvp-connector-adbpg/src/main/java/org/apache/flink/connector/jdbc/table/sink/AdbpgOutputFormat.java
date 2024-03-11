@@ -612,13 +612,15 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 System.exit(255);
             }
             closeConnection();
-        } catch (Exception e) {
-            Exception exception = e;
-
-            boolean isDuplicateKeyException =
-                    exception.getMessage() != null
-                            && (exception.getMessage().contains("duplicate key") && exception.getMessage().contains("violates unique constraint"))    // duplicate key on copy statement
-                            || exception.getMessage().contains("ON CONFLICT DO UPDATE");                                                   // duplicate key on copy on conflict statement
+        } catch (Exception exception) {
+            // Get the exception message and check if it is a duplicate key exception
+            String message = exception.getMessage();
+            boolean isDuplicateKeyException = false;
+                    if (message != null) {
+                        isDuplicateKeyException = message.contains("duplicate key")
+                                && message.contains("violates unique constraint")
+                                || message.contains("ON CONFLICT DO UPDATE");
+                    }
             if (isDuplicateKeyException) {
                 LOG.warn("Batch write failed with duplicate-key exception, will retry with preset conflict-mode.");
             } else {
@@ -647,8 +649,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 } else {
                     // exceptionMode only have "strict" and "ignore", if this is "ignore" return directly without report an expection
                     if ("strict".equalsIgnoreCase(exceptionMode)) {
-                        LOG.warn("Found unexpect exception, will ignore this row.");
-                        throw new RuntimeException(exception);
+                        LOG.error("Found unexpect exception, will ignore this row.", exception);
+                        System.exit(255);
                     }
                 }
             }
@@ -718,6 +720,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 //        mBuilder.setErrorLimitCount();
 //        mBuilder.setErrorLimitPercentage();
 //        mBuilder.setCondition();
+        mBuilder.setEnablePrimaryKeyOnTempTable(true);
 
         MergeOption mOpt = mBuilder.build();
 
@@ -740,7 +743,11 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private void executeMergeWithStreamingServer(List<RowData> rows, StreamingServerRowConverter rowDataConverter, boolean del) throws InterruptedException {
         long start = System.currentTimeMillis();
         int retryTime = 0;
-        while(retryTime++ < maxRetryTime) {
+        while(retryTime < maxRetryTime) {
+            if(retryTime > 0) {
+                LOG.warn("Retry " + retryTime + " times to executeMergeWithStreamingServer");
+            }
+
             ManagedChannel channel = null;
             GpssGrpc.GpssBlockingStub bStub = null;
             Session mSession = null;
@@ -763,11 +770,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 //put Flink-RowData into Adbss-RowData
                 List<org.apache.flink.connector.jdbc.table.sink.api.RowData> ssRows = new ArrayList<>();
                 for (RowData row : rows) {
-                    if (existsPrimaryKeys && del) {
                         bps += rowDataConverter.toExternal(row, ssRows);
-                    } else {
-                        bps += rowDataConverter.toExternal(row, ssRows);
-                    }
                 }
 
                 /** create a write request builder */
@@ -786,27 +789,33 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 CloseRequest cReq = CloseRequest.newBuilder()
                         .setSession(mSession)
                         //.setMaxErrorRows(15)
-                        //.setAbort(true)
                         .build();
                 /** use the blocking stub to call the Close service */
                 tStats = bStub.close(cReq);
                 /** display the result to stdout */
                 LOG.info("CloseRequest tStats: " + tStats.toString());
 
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                assert bStub != null;
-                assert mSession != null;
-                /** use the blocking stub to call the Disconnect service */
-                LOG.info("Disconnecting adbss with sessionID " + mSession.getID() + " ...");
-                bStub.disconnect(mSession);
+                long end = System.currentTimeMillis();
+                reportMetric(rows, start, end, bps);
 
-                // shutdown the channel
-                channel.shutdown().awaitTermination(7, TimeUnit.SECONDS);
-            }
-            long end = System.currentTimeMillis();
-            reportMetric(rows, start, end, bps);
+                return;
+            } catch (Exception e) {
+                retryTime++;
+                LOG.error("Exception in executeMergeWithStreamingServer: ", e);
+            } finally {
+                if (channel != null &&
+                        bStub != null &&
+                        mSession != null) {
+                    /** use the blocking stub to call the Disconnect service */
+                    LOG.info("Disconnecting adbss with sessionID " + mSession.getID() + " ...");
+                    bStub.disconnect(mSession);
+                    // shutdown the channel
+                    channel.shutdown().awaitTermination(7, TimeUnit.SECONDS);
+                }
+			}
+        }
+        if (retryTime >= maxRetryTime) {
+            throw new RuntimeException("Failed to executeMergeWithStreamingServer after " + maxRetryTime + " retries");
         }
     }
     private void executeSqlWithPrepareStatement(
