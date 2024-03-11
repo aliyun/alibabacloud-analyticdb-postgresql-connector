@@ -4,27 +4,26 @@
 package org.apache.flink.connector.jdbc.table.sink.api;
 
 /**
- * Protobuf type {@code api.TableInfo}
+ * Protobuf type {@code api.ReadResponse}
  */
-public final class TableInfo extends
+public final class ReadResponse extends
     com.google.protobuf.GeneratedMessageV3 implements
-    // @@protoc_insertion_point(message_implements:api.TableInfo)
-    TableInfoOrBuilder {
+    // @@protoc_insertion_point(message_implements:api.ReadResponse)
+    ReadResponseOrBuilder {
 private static final long serialVersionUID = 0L;
-  // Use TableInfo.newBuilder() to construct.
-  private TableInfo(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+  // Use ReadResponse.newBuilder() to construct.
+  private ReadResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
-  private TableInfo() {
-    name_ = "";
-    type_ = 0;
+  private ReadResponse() {
+    data_ = "";
   }
 
   @java.lang.Override
   @SuppressWarnings({"unused"})
   protected java.lang.Object newInstance(
       UnusedPrivateParameter unused) {
-    return new TableInfo();
+    return new ReadResponse();
   }
 
   @java.lang.Override
@@ -34,72 +33,54 @@ private static final long serialVersionUID = 0L;
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_TableInfo_descriptor;
+    return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_ReadResponse_descriptor;
   }
 
   @java.lang.Override
   protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_TableInfo_fieldAccessorTable
+    return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_ReadResponse_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
-            org.apache.flink.connector.jdbc.table.sink.api.TableInfo.class, org.apache.flink.connector.jdbc.table.sink.api.TableInfo.Builder.class);
+            org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.class, org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.Builder.class);
   }
 
-  public static final int NAME_FIELD_NUMBER = 1;
+  public static final int DATA_FIELD_NUMBER = 1;
   @SuppressWarnings("serial")
-  private volatile java.lang.Object name_ = "";
+  private volatile java.lang.Object data_ = "";
   /**
-   * <code>string Name = 1;</code>
-   * @return The name.
+   * <code>string Data = 1;</code>
+   * @return The data.
    */
   @java.lang.Override
-  public java.lang.String getName() {
-    java.lang.Object ref = name_;
+  public java.lang.String getData() {
+    java.lang.Object ref = data_;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
       com.google.protobuf.ByteString bs = 
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
-      name_ = s;
+      data_ = s;
       return s;
     }
   }
   /**
-   * <code>string Name = 1;</code>
-   * @return The bytes for name.
+   * <code>string Data = 1;</code>
+   * @return The bytes for data.
    */
   @java.lang.Override
   public com.google.protobuf.ByteString
-      getNameBytes() {
-    java.lang.Object ref = name_;
+      getDataBytes() {
+    java.lang.Object ref = data_;
     if (ref instanceof java.lang.String) {
       com.google.protobuf.ByteString b = 
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
-      name_ = b;
+      data_ = b;
       return b;
     } else {
       return (com.google.protobuf.ByteString) ref;
     }
-  }
-
-  public static final int TYPE_FIELD_NUMBER = 2;
-  private int type_ = 0;
-  /**
-   * <code>.api.RelationType Type = 2;</code>
-   * @return The enum numeric value on the wire for type.
-   */
-  @java.lang.Override public int getTypeValue() {
-    return type_;
-  }
-  /**
-   * <code>.api.RelationType Type = 2;</code>
-   * @return The type.
-   */
-  @java.lang.Override public org.apache.flink.connector.jdbc.table.sink.api.RelationType getType() {
-    org.apache.flink.connector.jdbc.table.sink.api.RelationType result = org.apache.flink.connector.jdbc.table.sink.api.RelationType.forNumber(type_);
-    return result == null ? org.apache.flink.connector.jdbc.table.sink.api.RelationType.UNRECOGNIZED : result;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -116,11 +97,8 @@ private static final long serialVersionUID = 0L;
   @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(name_)) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, name_);
-    }
-    if (type_ != org.apache.flink.connector.jdbc.table.sink.api.RelationType.Table.getNumber()) {
-      output.writeEnum(2, type_);
+    if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(data_)) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, data_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -131,12 +109,8 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(name_)) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, name_);
-    }
-    if (type_ != org.apache.flink.connector.jdbc.table.sink.api.RelationType.Table.getNumber()) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeEnumSize(2, type_);
+    if (!com.google.protobuf.GeneratedMessageV3.isStringEmpty(data_)) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, data_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -148,14 +122,13 @@ private static final long serialVersionUID = 0L;
     if (obj == this) {
      return true;
     }
-    if (!(obj instanceof org.apache.flink.connector.jdbc.table.sink.api.TableInfo)) {
+    if (!(obj instanceof org.apache.flink.connector.jdbc.table.sink.api.ReadResponse)) {
       return super.equals(obj);
     }
-    org.apache.flink.connector.jdbc.table.sink.api.TableInfo other = (org.apache.flink.connector.jdbc.table.sink.api.TableInfo) obj;
+    org.apache.flink.connector.jdbc.table.sink.api.ReadResponse other = (org.apache.flink.connector.jdbc.table.sink.api.ReadResponse) obj;
 
-    if (!getName()
-        .equals(other.getName())) return false;
-    if (type_ != other.type_) return false;
+    if (!getData()
+        .equals(other.getData())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -167,78 +140,76 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + NAME_FIELD_NUMBER;
-    hash = (53 * hash) + getName().hashCode();
-    hash = (37 * hash) + TYPE_FIELD_NUMBER;
-    hash = (53 * hash) + type_;
+    hash = (37 * hash) + DATA_FIELD_NUMBER;
+    hash = (53 * hash) + getData().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
   }
 
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       java.nio.ByteBuffer data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       com.google.protobuf.ByteString data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(byte[] data)
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(byte[] data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       byte[] data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(java.io.InputStream input)
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseDelimitedFrom(java.io.InputStream input)
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseDelimitedFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo parseFrom(
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
@@ -251,7 +222,7 @@ private static final long serialVersionUID = 0L;
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
   }
-  public static Builder newBuilder(org.apache.flink.connector.jdbc.table.sink.api.TableInfo prototype) {
+  public static Builder newBuilder(org.apache.flink.connector.jdbc.table.sink.api.ReadResponse prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
   @java.lang.Override
@@ -267,26 +238,26 @@ private static final long serialVersionUID = 0L;
     return builder;
   }
   /**
-   * Protobuf type {@code api.TableInfo}
+   * Protobuf type {@code api.ReadResponse}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:api.TableInfo)
-      org.apache.flink.connector.jdbc.table.sink.api.TableInfoOrBuilder {
+      // @@protoc_insertion_point(builder_implements:api.ReadResponse)
+      org.apache.flink.connector.jdbc.table.sink.api.ReadResponseOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_TableInfo_descriptor;
+      return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_ReadResponse_descriptor;
     }
 
     @java.lang.Override
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_TableInfo_fieldAccessorTable
+      return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_ReadResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              org.apache.flink.connector.jdbc.table.sink.api.TableInfo.class, org.apache.flink.connector.jdbc.table.sink.api.TableInfo.Builder.class);
+              org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.class, org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.Builder.class);
     }
 
-    // Construct using org.apache.flink.connector.jdbc.table.sink.api.TableInfo.newBuilder()
+    // Construct using org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.newBuilder()
     private Builder() {
 
     }
@@ -300,25 +271,24 @@ private static final long serialVersionUID = 0L;
     public Builder clear() {
       super.clear();
       bitField0_ = 0;
-      name_ = "";
-      type_ = 0;
+      data_ = "";
       return this;
     }
 
     @java.lang.Override
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_TableInfo_descriptor;
+      return org.apache.flink.connector.jdbc.table.sink.api.Adbpgss.internal_static_api_ReadResponse_descriptor;
     }
 
     @java.lang.Override
-    public org.apache.flink.connector.jdbc.table.sink.api.TableInfo getDefaultInstanceForType() {
-      return org.apache.flink.connector.jdbc.table.sink.api.TableInfo.getDefaultInstance();
+    public org.apache.flink.connector.jdbc.table.sink.api.ReadResponse getDefaultInstanceForType() {
+      return org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.getDefaultInstance();
     }
 
     @java.lang.Override
-    public org.apache.flink.connector.jdbc.table.sink.api.TableInfo build() {
-      org.apache.flink.connector.jdbc.table.sink.api.TableInfo result = buildPartial();
+    public org.apache.flink.connector.jdbc.table.sink.api.ReadResponse build() {
+      org.apache.flink.connector.jdbc.table.sink.api.ReadResponse result = buildPartial();
       if (!result.isInitialized()) {
         throw newUninitializedMessageException(result);
       }
@@ -326,20 +296,17 @@ private static final long serialVersionUID = 0L;
     }
 
     @java.lang.Override
-    public org.apache.flink.connector.jdbc.table.sink.api.TableInfo buildPartial() {
-      org.apache.flink.connector.jdbc.table.sink.api.TableInfo result = new org.apache.flink.connector.jdbc.table.sink.api.TableInfo(this);
+    public org.apache.flink.connector.jdbc.table.sink.api.ReadResponse buildPartial() {
+      org.apache.flink.connector.jdbc.table.sink.api.ReadResponse result = new org.apache.flink.connector.jdbc.table.sink.api.ReadResponse(this);
       if (bitField0_ != 0) { buildPartial0(result); }
       onBuilt();
       return result;
     }
 
-    private void buildPartial0(org.apache.flink.connector.jdbc.table.sink.api.TableInfo result) {
+    private void buildPartial0(org.apache.flink.connector.jdbc.table.sink.api.ReadResponse result) {
       int from_bitField0_ = bitField0_;
       if (((from_bitField0_ & 0x00000001) != 0)) {
-        result.name_ = name_;
-      }
-      if (((from_bitField0_ & 0x00000002) != 0)) {
-        result.type_ = type_;
+        result.data_ = data_;
       }
     }
 
@@ -377,23 +344,20 @@ private static final long serialVersionUID = 0L;
     }
     @java.lang.Override
     public Builder mergeFrom(com.google.protobuf.Message other) {
-      if (other instanceof org.apache.flink.connector.jdbc.table.sink.api.TableInfo) {
-        return mergeFrom((org.apache.flink.connector.jdbc.table.sink.api.TableInfo)other);
+      if (other instanceof org.apache.flink.connector.jdbc.table.sink.api.ReadResponse) {
+        return mergeFrom((org.apache.flink.connector.jdbc.table.sink.api.ReadResponse)other);
       } else {
         super.mergeFrom(other);
         return this;
       }
     }
 
-    public Builder mergeFrom(org.apache.flink.connector.jdbc.table.sink.api.TableInfo other) {
-      if (other == org.apache.flink.connector.jdbc.table.sink.api.TableInfo.getDefaultInstance()) return this;
-      if (!other.getName().isEmpty()) {
-        name_ = other.name_;
+    public Builder mergeFrom(org.apache.flink.connector.jdbc.table.sink.api.ReadResponse other) {
+      if (other == org.apache.flink.connector.jdbc.table.sink.api.ReadResponse.getDefaultInstance()) return this;
+      if (!other.getData().isEmpty()) {
+        data_ = other.data_;
         bitField0_ |= 0x00000001;
         onChanged();
-      }
-      if (other.type_ != 0) {
-        setTypeValue(other.getTypeValue());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -422,15 +386,10 @@ private static final long serialVersionUID = 0L;
               done = true;
               break;
             case 10: {
-              name_ = input.readStringRequireUtf8();
+              data_ = input.readStringRequireUtf8();
               bitField0_ |= 0x00000001;
               break;
             } // case 10
-            case 16: {
-              type_ = input.readEnum();
-              bitField0_ |= 0x00000002;
-              break;
-            } // case 16
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -448,127 +407,74 @@ private static final long serialVersionUID = 0L;
     }
     private int bitField0_;
 
-    private java.lang.Object name_ = "";
+    private java.lang.Object data_ = "";
     /**
-     * <code>string Name = 1;</code>
-     * @return The name.
+     * <code>string Data = 1;</code>
+     * @return The data.
      */
-    public java.lang.String getName() {
-      java.lang.Object ref = name_;
+    public java.lang.String getData() {
+      java.lang.Object ref = data_;
       if (!(ref instanceof java.lang.String)) {
         com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        name_ = s;
+        data_ = s;
         return s;
       } else {
         return (java.lang.String) ref;
       }
     }
     /**
-     * <code>string Name = 1;</code>
-     * @return The bytes for name.
+     * <code>string Data = 1;</code>
+     * @return The bytes for data.
      */
     public com.google.protobuf.ByteString
-        getNameBytes() {
-      java.lang.Object ref = name_;
+        getDataBytes() {
+      java.lang.Object ref = data_;
       if (ref instanceof String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        name_ = b;
+        data_ = b;
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
       }
     }
     /**
-     * <code>string Name = 1;</code>
-     * @param value The name to set.
+     * <code>string Data = 1;</code>
+     * @param value The data to set.
      * @return This builder for chaining.
      */
-    public Builder setName(
+    public Builder setData(
         java.lang.String value) {
       if (value == null) { throw new NullPointerException(); }
-      name_ = value;
+      data_ = value;
       bitField0_ |= 0x00000001;
       onChanged();
       return this;
     }
     /**
-     * <code>string Name = 1;</code>
+     * <code>string Data = 1;</code>
      * @return This builder for chaining.
      */
-    public Builder clearName() {
-      name_ = getDefaultInstance().getName();
+    public Builder clearData() {
+      data_ = getDefaultInstance().getData();
       bitField0_ = (bitField0_ & ~0x00000001);
       onChanged();
       return this;
     }
     /**
-     * <code>string Name = 1;</code>
-     * @param value The bytes for name to set.
+     * <code>string Data = 1;</code>
+     * @param value The bytes for data to set.
      * @return This builder for chaining.
      */
-    public Builder setNameBytes(
+    public Builder setDataBytes(
         com.google.protobuf.ByteString value) {
       if (value == null) { throw new NullPointerException(); }
       checkByteStringIsUtf8(value);
-      name_ = value;
+      data_ = value;
       bitField0_ |= 0x00000001;
-      onChanged();
-      return this;
-    }
-
-    private int type_ = 0;
-    /**
-     * <code>.api.RelationType Type = 2;</code>
-     * @return The enum numeric value on the wire for type.
-     */
-    @java.lang.Override public int getTypeValue() {
-      return type_;
-    }
-    /**
-     * <code>.api.RelationType Type = 2;</code>
-     * @param value The enum numeric value on the wire for type to set.
-     * @return This builder for chaining.
-     */
-    public Builder setTypeValue(int value) {
-      type_ = value;
-      bitField0_ |= 0x00000002;
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>.api.RelationType Type = 2;</code>
-     * @return The type.
-     */
-    @java.lang.Override
-    public org.apache.flink.connector.jdbc.table.sink.api.RelationType getType() {
-      org.apache.flink.connector.jdbc.table.sink.api.RelationType result = org.apache.flink.connector.jdbc.table.sink.api.RelationType.forNumber(type_);
-      return result == null ? org.apache.flink.connector.jdbc.table.sink.api.RelationType.UNRECOGNIZED : result;
-    }
-    /**
-     * <code>.api.RelationType Type = 2;</code>
-     * @param value The type to set.
-     * @return This builder for chaining.
-     */
-    public Builder setType(org.apache.flink.connector.jdbc.table.sink.api.RelationType value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
-      bitField0_ |= 0x00000002;
-      type_ = value.getNumber();
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>.api.RelationType Type = 2;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearType() {
-      bitField0_ = (bitField0_ & ~0x00000002);
-      type_ = 0;
       onChanged();
       return this;
     }
@@ -585,23 +491,23 @@ private static final long serialVersionUID = 0L;
     }
 
 
-    // @@protoc_insertion_point(builder_scope:api.TableInfo)
+    // @@protoc_insertion_point(builder_scope:api.ReadResponse)
   }
 
-  // @@protoc_insertion_point(class_scope:api.TableInfo)
-  private static final org.apache.flink.connector.jdbc.table.sink.api.TableInfo DEFAULT_INSTANCE;
+  // @@protoc_insertion_point(class_scope:api.ReadResponse)
+  private static final org.apache.flink.connector.jdbc.table.sink.api.ReadResponse DEFAULT_INSTANCE;
   static {
-    DEFAULT_INSTANCE = new org.apache.flink.connector.jdbc.table.sink.api.TableInfo();
+    DEFAULT_INSTANCE = new org.apache.flink.connector.jdbc.table.sink.api.ReadResponse();
   }
 
-  public static org.apache.flink.connector.jdbc.table.sink.api.TableInfo getDefaultInstance() {
+  public static org.apache.flink.connector.jdbc.table.sink.api.ReadResponse getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
-  private static final com.google.protobuf.Parser<TableInfo>
-      PARSER = new com.google.protobuf.AbstractParser<TableInfo>() {
+  private static final com.google.protobuf.Parser<ReadResponse>
+      PARSER = new com.google.protobuf.AbstractParser<ReadResponse>() {
     @java.lang.Override
-    public TableInfo parsePartialFrom(
+    public ReadResponse parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -620,17 +526,17 @@ private static final long serialVersionUID = 0L;
     }
   };
 
-  public static com.google.protobuf.Parser<TableInfo> parser() {
+  public static com.google.protobuf.Parser<ReadResponse> parser() {
     return PARSER;
   }
 
   @java.lang.Override
-  public com.google.protobuf.Parser<TableInfo> getParserForType() {
+  public com.google.protobuf.Parser<ReadResponse> getParserForType() {
     return PARSER;
   }
 
   @java.lang.Override
-  public org.apache.flink.connector.jdbc.table.sink.api.TableInfo getDefaultInstanceForType() {
+  public org.apache.flink.connector.jdbc.table.sink.api.ReadResponse getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }
 
