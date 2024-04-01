@@ -377,17 +377,13 @@ public class AdbpgOptions {
         dataSource.setDriverClassName(AdbpgOptions.DRIVER_CLASS);
         dataSource.setMaxActive(connectionMaxActive);
         dataSource.setMaxWait(connectionMaxWait);
-        dataSource.setInitialSize(0);
+        dataSource.setInitialSize(1);
         dataSource.setPoolPreparedStatements(false);
-        dataSource.setValidationQuery("select 'adbpg_flink_connector'");
         dataSource.setTestWhileIdle(true);
-        dataSource.setTestOnBorrow(false);
-        dataSource.setTestOnReturn(false);
-        dataSource.setTimeBetweenEvictionRunsMillis(180000);
-        dataSource.setMinEvictableIdleTimeMillis(3600000);
-        dataSource.setMaxEvictableIdleTimeMillis(9000000);
-        dataSource.setRemoveAbandoned(false);
-        dataSource.setRemoveAbandonedTimeout(300);
+        dataSource.setValidationQuery("select 'adbpg_flink_connector'");
+        dataSource.setTimeBetweenEvictionRunsMillis(-1);
+        dataSource.setMinEvictableIdleTimeMillis(Long.MAX_VALUE - 1);
+        dataSource.setMaxEvictableIdleTimeMillis(Long.MAX_VALUE);
         LOG.info("connector " + CONNECTOR_TYPE + " created using url=" + url + ", "
                 + "tableName=" + config.get(TABLE_NAME) + ", "
                 + "userName=" + userName + ", "
