@@ -20,13 +20,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.druid.pool.DruidPooledConnection;
 import org.apache.commons.io.Charsets;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.flink.api.common.io.CleanupWhenUnsuccessful;
 import org.apache.flink.api.common.io.RichOutputFormat;
@@ -107,6 +107,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private Set<String> primaryKeys;
     private List<String> pkFields = new ArrayList<String>();
     private List<Integer> pkIndex = new ArrayList<>();
+    private List<Integer> shardKeys = new ArrayList<>();
     private LogicalType[] pkTypes;
     private LogicalType[] updateStatementFieldTypes;
     private int fieldNum;
@@ -140,6 +141,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     // version after which support upsert for partitioned table
     private long adbpg_version = 6360;
     private boolean support_upsert = true;
+
+    private boolean support_pre_hash = false;
     // datasource
     private transient DruidDataSource dataSource = null;
     private transient ScheduledExecutorService executorService;
@@ -154,6 +157,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private String conflictMode;
     private String accessMethod;
     private int shardCount;
+    private int actualShardCount;
     private int useCopy;
     private String targetSchema;
     private String exceptionMode;
@@ -333,6 +337,39 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         return res;
     }
 
+    private boolean getShardKeys() {
+        boolean res = false;
+        try {
+            // 准备SQL查询
+            String sql = String.format("select distkey, numsegments from gp_distribution_policy where localoid = '%s.%s'::regclass;", this.targetSchema, this.tableName);
+            Statement statement = connection.createStatement();
+            ResultSet rs = statement.executeQuery(sql);
+
+            if (rs.next()) {
+                // 获取并处理distkey
+                String distKeyStr = rs.getString("distkey");
+                if (distKeyStr != null && !distKeyStr.trim().isEmpty()) {
+                    // 用空格分隔distkey，并转换为Integer列表
+                    this.shardKeys = Arrays.stream(distKeyStr.trim().split("\\s+"))
+                            .map(s -> Integer.parseInt(s) - 1)
+                            .collect(Collectors.toList());
+
+                    res = true;
+                    if (1 == verbose) {
+                        LOG.info("Table shard keys are {}", this.shardKeys);
+                    }
+                }
+
+                // 获取并转换numsegments为int
+                this.actualShardCount = rs.getInt("numsegments");
+            }
+        } catch (SQLException e) {
+            LOG.warn("Error encountered during check table shard", e);
+        }
+        return res;
+    }
+
+
     @Override
     public void open(int taskNumber, int numTasks) throws IOException {
 
@@ -340,8 +377,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
-            if (checkPartition() && writeMode == 1) {    // check if table is partition table, if it is true, we shouldn't use upsert statement.
-                support_upsert = false;
+            if (getShardKeys() && this.shardCount > 0) {
+                this.support_pre_hash = true;
             }
             rawConn = (DruidPooledConnection) connection;
             baseConn = (BaseConnection) (rawConn.getConnection());
@@ -380,7 +417,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
         RowData rowData = rowDataSerializer.copy(record);
         inputCount++;
-        if (existsPrimaryKeys && shardCount >0 )
+        if (existsPrimaryKeys && support_pre_hash )
         {
             synchronized (treeMapBuffer) {
                 // Construct primary key string as map key
@@ -449,16 +486,16 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         return dupKey;
     }
 
-    private int getShardId(RowData row, List<Integer> pkIndex) {
+    private int getShardId(RowData row, List<Integer> shardKeys) {
         int nKeys;
         int j = 0;
         int shardId;
-        nKeys = pkIndex.size();
+        nKeys = shardKeys.size();
         String[] values = new String[nKeys];
         int[] nulls = new int[nKeys];
         int[] types = new int[nKeys];
 
-        for (int i : pkIndex) {
+        for (int i : shardKeys) {
             if (row.isNullAt(i)) {
                 nulls[j] = 1;
                 continue;
@@ -507,11 +544,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             j++;
         }
 
-        shardId = GreenplumCdbHash.getTargetSegmentId(values, nulls, types, nKeys, shardCount);
-        if (LOG.isDebugEnabled()) {
-            String dupKey = constructDupKey(row, pkIndex);
-            LOG.debug("current row shard id is " + shardId + ", primary key is " + dupKey);
+        shardId = GreenplumCdbHash.getTargetSegmentId(values, nulls, types, nKeys, this.actualShardCount);
+        if (LOG.isDebugEnabled())
+        {
+            String dupKey = constructDupKey(row, shardKeys);
+            LOG.debug("current row shard id is " + shardId + ", shard key is " + dupKey);
         }
+
         return shardId;
     }
 
@@ -561,7 +600,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     }
 
                     treeMapBuffer.forEach((key, value) -> {
-                        int shard = getShardId(value, pkIndex);
+                        int shard = getShardId(value, this.shardKeys);
 
                         switch (value.getRowKind()) {
                             case INSERT:
