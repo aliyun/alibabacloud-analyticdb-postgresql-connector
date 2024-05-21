@@ -7,11 +7,14 @@ public class UInt32 extends UInt<UInt32> {
         super(value);
     }
 
+    public UInt32(byte value) {
+        super(value & 0xFF);
+    }
 
     @Override
     public UInt32 divide(UInt32 other) {
         long div = (this.uintVal & LONG) / (other.uintVal & LONG);
-        int result = (int)div;
+        int result = (int) div;
         return new UInt32(result);
     }
 
@@ -23,7 +26,7 @@ public class UInt32 extends UInt<UInt32> {
     @Override
     public UInt32 multiply(UInt32 other) {
         long multi = (this.uintVal & LONG) * (other.uintVal & LONG);
-        int result = (int)multi;
+        int result = (int) multi;
         return new UInt32(result);
     }
 
@@ -59,19 +62,26 @@ public class UInt32 extends UInt<UInt32> {
     @Override
     public UInt32 add(UInt32 other) {
         long sum = (this.uintVal & LONG) + (other.uintVal & LONG);
-        int out = (int)sum;
+        int out = (int) sum;
         return new UInt32(out);
     }
+
     public UInt32 add(char other) {
         long sum = (this.uintVal & LONG) + (other & LONG);
-        int out = (int)sum;
+        int out = (int) sum;
+        return new UInt32(out);
+    }
+
+    public UInt32 add(byte other) {
+        long sum = (this.uintVal & LONG) + (other & 0xFF);
+        int out = (int) sum;
         return new UInt32(out);
     }
 
     @Override
     public UInt32 subtract(UInt32 other) {
         long sub = (this.uintVal & LONG) - (other.uintVal & LONG);
-        int result = (int)sub;
+        int result = (int) sub;
         return new UInt32(result);
     }
 
@@ -83,7 +93,7 @@ public class UInt32 extends UInt<UInt32> {
         } else {
             lShift =  (this.uintVal & LONG) >>> -places;
         }
-        int result = (int)lShift;
+        int result = (int) lShift;
         return new UInt32(result);
     }
 
@@ -95,7 +105,7 @@ public class UInt32 extends UInt<UInt32> {
         } else {
             rShift = (this.uintVal & LONG) << -places;
         }
-        int result = (int)rShift;
+        int result = (int) rShift;
         return new UInt32(result);
     }
 
@@ -124,3 +134,4 @@ public class UInt32 extends UInt<UInt32> {
         return 0;
     }
 }
+

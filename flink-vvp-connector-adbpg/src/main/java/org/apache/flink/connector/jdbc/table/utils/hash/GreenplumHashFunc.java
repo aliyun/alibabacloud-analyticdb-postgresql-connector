@@ -3,9 +3,11 @@ package org.apache.flink.connector.jdbc.table.utils.hash;
 import org.apache.flink.connector.jdbc.table.utils.hash.util.PGTm;
 import org.apache.flink.connector.jdbc.table.utils.hash.util.UInt32;
 
+import java.nio.charset.Charset;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -30,28 +32,34 @@ import static java.time.temporal.ChronoField.SECOND_OF_MINUTE;
 public class GreenplumHashFunc {
     public static final int DEC_DIGITS = 4;
 
-    // TODO: 是null值的情况还没有写，需要写完
-    // TODO: timestamp 类型 check 一下 useIntegerDatetime = false 的情况，需要重新编译一个数据库
-    // TODO: timestamp 类型需要check一下不同timestamp string类型对应的hash值
-    // TODO: timestamp 类型parse format的时候，不兼容 00:00:01.0002 这样的，需要到小数点后6位
-    // TODO: postgresql 支持了各种类型的timestamp format，这里支持的远远不够
-    // TODO: 没有考虑exception的情况，需要整体设计一下
+    public static final int POSTGRES_EPOCH_JDATE = 2451545;
+
     public static UInt32 hashChar(char k) {
-        return hashUInt32(new UInt32((int)k));
+        return hashUInt32(new UInt32(k));
     }
 
+    public static UInt32 hashBoolean(char k) {
+        if (k == '0') {
+            return hashChar((char) 0);
+        } else {
+            return hashChar((char) 1);
+        }
+    }
 
+    /** used for smallint */
     public static UInt32 hashInt2(int k) {
         return hashUInt32(new UInt32(k));
     }
-    public static UInt32 hashInt4(int k)
-    {
+
+    /** used for integer */
+    public static UInt32 hashInt4(int k) {
         return hashUInt32(new UInt32(k));
     }
 
+    /** used for bigint */
     public static UInt32 hashInt8(long val) {
-        UInt32 lohalf = new UInt32((int)val);
-        UInt32 hihalf = new UInt32((int)(val >> 32));
+        UInt32 lohalf = new UInt32((int) val);
+        UInt32 hihalf = new UInt32((int) (val >> 32));
 
         if (val >= 0) {
             lohalf = lohalf.xor(hihalf);
@@ -62,24 +70,21 @@ public class GreenplumHashFunc {
         return hashUInt32(lohalf);
     }
 
-    // public UInt32 timetzHash(){}
+    public static UInt32 hashBpChar(String val, Charset charset) {
+        byte[] inputBytes = val.getBytes(charset);
 
-    public static UInt32 hashBpChar(String val) {
-        char[] input = val.toCharArray();
-
-        return hashAny(input, input.length);
+        return hashAny(inputBytes, inputBytes.length);
     }
 
-    public static UInt32 hashText(String val) {
-        char[] input = val.toCharArray();
-        return hashAny(input, input.length);
+    public static UInt32 hashText(String val, Charset charset) {
+        byte[] inputBytes = val.getBytes(charset);
+
+        return hashAny(inputBytes, inputBytes.length);
     }
 
-
-    // in postgresql date / timestamp is julian date, so start with 4713 BC
-
-    // timestamptz / timestamp
-    // time
+    /**
+     * timeHash rewrite function time_hash in adbpg.
+     */
     public static UInt32 timeHash(String val, boolean useIntegerDatetime) {
         // the unit in time is microsecond
         long julianTimeOffset;
@@ -88,7 +93,7 @@ public class GreenplumHashFunc {
         DateTimeFormatterBuilder dateTimeFormatterBuilder  = new DateTimeFormatterBuilder()
                 .appendPattern("HH:mm:ss")
                 .optionalStart()
-                .appendFraction(ChronoField.NANO_OF_SECOND, 0, 6 ,true)
+                .appendFraction(ChronoField.NANO_OF_SECOND, 0, 6, true)
                 .optionalEnd();
 
         LocalTime time = LocalTime.parse(val, dateTimeFormatterBuilder.toFormatter());
@@ -103,13 +108,15 @@ public class GreenplumHashFunc {
         if (useIntegerDatetime) {
             return hashInt8(julianTimeOffset);
         } else {
-            return hashFloat8((double)julianTimeOffset);
+            return hashFloat8((double) julianTimeOffset);
         }
     }
 
-    // timetzHash function just makes compatible with format like '0000:00:00+08:00 GMT'
-    // timetz in postgresql is formatted in TimeTzADT struct, we will calculate time
-    // Attention: the same time in time_hash and timetz_hash is not same.
+    /**
+     * timetzHash function rewrites timetz_hash in adbpg and just makes compatible
+     * with format like '0000:00:00+08:00 GMT'
+     * Attention: the same time in time_hash and timetz_hash is not same.
+     */
     public static UInt32 timetzHash(String val, boolean useIntegerDatetime) {
         long julianTimeOffset;
         long timeZone;
@@ -141,7 +148,6 @@ public class GreenplumHashFunc {
             }
             julianTimeOffset = tm2time(offsetDateTime.getHour(), offsetDateTime.getMinute(), offsetDateTime.getSecond(), fractionalSecond, useIntegerDatetime);
             timeZone = -offsetDateTime.getOffset().getTotalSeconds();
-
         } else {
             LocalTime time = LocalTime.parse(val, dateTimeFormatterBuilder.toFormatter());
             if (useIntegerDatetime) {
@@ -160,9 +166,30 @@ public class GreenplumHashFunc {
             thash = hashFloat8(julianTimeOffset);
         }
 
-        return thash.xor(hashUInt32(new UInt32((int)timeZone)));
+        return thash.xor(hashUInt32(new UInt32((int) timeZone)));
     }
 
+    /**
+     * dateHash will first convert calendar time to Julian date and calculate it
+     * using hashInt4.
+     * Note: we just support date in format like 'yyyy-MM-dd'.
+     * In postgresql date / timestamp is julian date, so we use 4713 BC as the beginning of time.
+     */
+    public static UInt32 dateHash(String val) {
+        // trim input string and get the first 10 characters
+        String dateString = val.trim().substring(0, 10);
+
+        DateTimeFormatterBuilder dateTimeFormatterBuilder = new DateTimeFormatterBuilder()
+                .parseCaseInsensitive()
+                .appendPattern("yyyy-MM-dd");
+
+        DateTimeFormatter dateTimeFormatter = dateTimeFormatterBuilder.toFormatter();
+        LocalDate dateTime = LocalDate.parse(dateString, dateTimeFormatter);
+
+        long julianDate = date2j(dateTime.getYear(), dateTime.getMonthValue(), dateTime.getDayOfMonth()) - POSTGRES_EPOCH_JDATE;
+        // convert julianDate to int
+        return hashInt4((int) julianDate);
+    }
 
     public static long tm2time(int hour, int min, int second, int fractionalSecond, boolean useIntegerDatetime) {
         long result;
@@ -174,14 +201,11 @@ public class GreenplumHashFunc {
         return result;
     }
 
-
     public static UInt32 timestampHash(String val, boolean useIntegerDatetime) {
         long julianTimeOffset;
 
         // parse LocalTime to PGTm
         PGTm pgTm = parseTimestampWithoutTimeZoneUsingPattern(val);
-
-
         int fractionalSecond = 0;
         if (useIntegerDatetime) {
             fractionalSecond = pgTm.getFractionalSecond() / 1000;
@@ -192,7 +216,7 @@ public class GreenplumHashFunc {
         if (useIntegerDatetime) {
             return hashInt8(julianTimeOffset);
         } else {
-            return hashFloat8((double)julianTimeOffset);
+            return hashFloat8((double) julianTimeOffset);
         }
     }
 
@@ -219,18 +243,15 @@ public class GreenplumHashFunc {
             fractionalSecond = pgTm.getFractionalSecond() / 1000000;
         }
 
-        julianTimeOffset = tm2timestamp(pgTm, fractionalSecond, (int)pgTm.getTmZone(), useIntegerDatetime);
+        julianTimeOffset = tm2timestamp(pgTm, fractionalSecond, (int) pgTm.getTmZone(), useIntegerDatetime);
         if (useIntegerDatetime) {
             return hashInt8(julianTimeOffset);
         } else {
-            return hashFloat8((double)julianTimeOffset);
+            return hashFloat8((double) julianTimeOffset);
         }
     }
 
 
-    // to compatible with dts, just support data format like '2023-12-12 01:12:12.123456 +08:00 GMT' / ‘2023-12-12 01:01:01.123456 +08:00 UTC'
-    // UTC and GMT should be considered equivalent, so UTC and GMT is optional
-    // TODO: compatible more date format
     public static PGTm parseTimestampWithoutTimeZoneUsingPattern(String val) {
         PGTm pgTm = new PGTm();
 
@@ -238,7 +259,7 @@ public class GreenplumHashFunc {
                 .parseCaseInsensitive()
                 .appendPattern("yyyy-MM-dd HH:mm:ss")
                 .optionalStart()
-                .appendFraction(ChronoField.NANO_OF_SECOND, 0, 6 ,true)
+                .appendFraction(ChronoField.NANO_OF_SECOND, 0, 6,  true)
                 .optionalEnd();
 
         DateTimeFormatter dateTimeFormatter = dateTimeFormatterBuilder.toFormatter();
@@ -256,13 +277,24 @@ public class GreenplumHashFunc {
         return pgTm;
     }
 
+    /**
+     * parseTimestampWithoutTimeZoneUsingPattern is used to parse timestamp string to PGTm.
+     * Note: To compatible with dts, just support data format like '2023-12-12 01:12:12.123456 +08:00 GMT'.
+     * UTC and GMT should be considered equivalent, so UTC and GMT is optional
+     * TODO(@yiwei): compatible more date format
+     *
+     * @param val
+     *        input timestamp string
+     * @param gpCurrentUTCOffset
+     *        time offset with UTC, we get it from pg_timezone_names.
+     */
     public static PGTm parseTimestampWithTimeZoneUsingPattern(String val, String gpCurrentUTCOffset) {
         PGTm pgTm = new PGTm();
 
         DateTimeFormatterBuilder dateTimeFormatterBuilder  = new DateTimeFormatterBuilder()
                 .appendPattern("yyyy-MM-dd HH:mm:ss")
                 .optionalStart()
-                .appendFraction(ChronoField.NANO_OF_SECOND, 0, 6 ,true)
+                .appendFraction(ChronoField.NANO_OF_SECOND, 0, 6, true)
                 .optionalEnd()
                 .optionalStart()
                 .appendLiteral(" ")
@@ -298,10 +330,10 @@ public class GreenplumHashFunc {
                 } else if (gpCurrentUTCOffset.charAt(charOffset) == '-') {
                     signBit = -1;
                 } else {
-                    // TODO: throws exception to upper level
+                    // TODO(@yiwei): throws exception to upper level
                     signBit = 0; // make ide quiet
                 }
-                charOffset ++;
+                charOffset++;
                 continue;
             }
 
@@ -311,24 +343,18 @@ public class GreenplumHashFunc {
             } else {
                 buffer.append(gpCurrentUTCOffset.charAt(charOffset));
             }
-            charOffset ++;
+            charOffset++;
         }
         minute = Integer.parseInt(buffer.toString());
-
-        if ((hour < 0 || hour > 15) || (minute < 0 || minute >60)) {
-            // TODO: throw exception to upper level
-        }
-
         int pgTmZone = dateTime.getOffset().getTotalSeconds() - signBit * ((hour * 60 * 60) + minute * 60);
-
         pgTm.setTmZone(pgTmZone);
         return pgTm;
     }
-    // fractionalSecond : '2023-10-10 00:00:00.023' -> '.023' -> 0.023 * 1000000 -> 取整23000
+
     public static long tm2timestamp(PGTm pgTm, int fractionalSecond, int timeZone, boolean useIntegerDatetime) {
         long result;
 
-        long date = date2j(pgTm.getTmYear(), pgTm.getTmMon(), pgTm.getTmMDay()) - 2451545; // date2j(2000, 1, 1)
+        long date = date2j(pgTm.getTmYear(), pgTm.getTmMon(), pgTm.getTmMDay()) - POSTGRES_EPOCH_JDATE; // date2j(2000, 1, 1)
         long time = time2t(pgTm.getTmHour(), pgTm.getTmMin(), pgTm.getTmSec(), fractionalSecond, useIntegerDatetime);
         if (useIntegerDatetime) {
             result = date * 86400000000L + time;
@@ -344,7 +370,7 @@ public class GreenplumHashFunc {
         return result;
     }
 
-    /*
+    /**
      * Calendar time to Julian date conversions.
      * Julian day counts from 0 to 2147483647 (Nov 24, -4713 to Jun 3, 5874898)
      */
@@ -377,10 +403,10 @@ public class GreenplumHashFunc {
         return timeOffset;
     }
 
-
     public static UInt32 hashFloat4(String val) {
         return hashFloat4(Float.parseFloat(val));
     }
+
     public static UInt32 hashFloat4(float val) {
         if (val == 0) {
             return new UInt32(0);
@@ -396,7 +422,6 @@ public class GreenplumHashFunc {
         return hashFloat8(Double.parseDouble(val));
     }
 
-    // Attention: input must double value not float
     public static UInt32 hashFloat8(double val) {
         if (val == 0) {
             return new UInt32(0);
@@ -407,22 +432,30 @@ public class GreenplumHashFunc {
         return hashAny(input, input.length);
     }
 
-    // We do not take 1E-10 into consideration.
-    // Attention: we don't hash on Numeric's scale, since two numerics can
-    // compare equal but have different scales. We also don't hash on the sign,
-    // although we could: since a sign difference implies inequality, this
-    // shouldn't affect correctness. (So we do not calculate dscale and sign here).
+    /**
+     * hashNumeric rewrites function hash_numeric in adbpg.
+     * Attention:
+     * 1) We do not take 1E-10 into consideration.
+     * 2) we don't hash on Numeric's scale, since two numerics can
+     * compare equal but have different scales. We also don't hash on the sign,
+     * although we could: since a sign difference implies inequality, this
+     * shouldn't affect correctness. (So we do not calculate dscale and sign here).
+     */
     public static UInt32 hashNumeric(String val) {
         // trim input value
         val = val.trim();
         int dWeight = 0;
-        // unsigned char tdd[NUMERIC_LOCAL_DTXT], NUMERIC_LOCAL_DTXT=128
-        // if val.length + DEC_DIGITS * 2 > NUMERIC_LOCAL_DTXT
-        // palloc a new decDigits
+        /*
+         * unsigned char tdd[NUMERIC_LOCAL_DTXT], NUMERIC_LOCAL_DTXT=128
+         * if val.length + DEC_DIGITS * 2 > NUMERIC_LOCAL_DTXT
+         * palloc a new decDigits
+         */
         List<Character> decDigits = new ArrayList<>();
 
-        // init numeric var from input string
-        // trim zero input value
+        /*
+         * init numeric var from input string
+         * trim zero input value.
+         */
         int zeroPosition = 0;
         for (int i = 0; i < val.length(); i++) {
             if (val.charAt(i) != '0') {
@@ -436,14 +469,10 @@ public class GreenplumHashFunc {
             if (val.charAt(i) >= '0' && val.charAt(i) <= '9') {
                 decDigits.add((char) (val.charAt(i) - '0'));
                 if (!haveDp) {
-                    dWeight ++;
+                    dWeight++;
                 }
             } else if (val.charAt(i) == '.') {
-                if (haveDp) {
-                    //TODO: throws exception here
-                } else {
-                    haveDp = true;
-                }
+                haveDp = true;
             } else {
                 break;
             }
@@ -452,7 +481,7 @@ public class GreenplumHashFunc {
         // get digits > 0
         int digitBeforeDpNumber = (dWeight + DEC_DIGITS - 1) / DEC_DIGITS;
 
-        short [] digitsBeforeDp;
+        short[] digitsBeforeDp;
         // if number before dope is zero, add zero to digitBeforeDp
         if (digitBeforeDpNumber == 0) {
             digitsBeforeDp = new short[]{(short) 0};
@@ -470,7 +499,7 @@ public class GreenplumHashFunc {
         int offset = 0;
         boolean finishedOneDigit = false;
         for (int i = 0; i < dWeight; i++) {
-            digitValue = (short)(digitValue * 10 + decDigits.get(i));
+            digitValue = (short) (digitValue * 10 + decDigits.get(i));
             if (j == 4) {
                 digitsBeforeDp[offset++] = digitValue;
                 digitValue = 0;
@@ -487,7 +516,7 @@ public class GreenplumHashFunc {
         }
         // create an int array and init while we have dope in input string
         int digitAfterDpNumber  = (decDigits.size() - dWeight + DEC_DIGITS - 1) / DEC_DIGITS;
-        short [] digitsAfterDp = new short[digitAfterDpNumber];
+        short[] digitsAfterDp = new short[digitAfterDpNumber];
 
         // init offset here
         offset = 0;
@@ -496,7 +525,7 @@ public class GreenplumHashFunc {
         finishedOneDigit = false;
         if (haveDp) {
             for (int i = dWeight; i < decDigits.size(); i++) {
-                digitValue = (short)(digitValue * 10 + decDigits.get(i));
+                digitValue = (short) (digitValue * 10 + decDigits.get(i));
                 if (j == 4) {
                     digitsAfterDp[offset++] = digitValue;
                     digitValue = 0;
@@ -509,13 +538,15 @@ public class GreenplumHashFunc {
             }
 
             if (!finishedOneDigit) {
-                short bowValue = (short)Math.pow(10, DEC_DIGITS - j + 1);
-                digitsAfterDp[offset] = (short)(digitValue * bowValue);
+                short bowValue = (short) Math.pow(10, DEC_DIGITS - j + 1);
+                digitsAfterDp[offset] = (short) (digitValue * bowValue);
             }
         }
 
-        // trim zero value in digitsBeforeDp and digitsAfterDp and
-        // mark it using startOffset(digitBeforeDp) and endOffset(digitAfterDp)
+        /*
+         * trim zero value in digitsBeforeDp and digitsAfterDp and
+         * mark it using startOffset(digitBeforeDp) and endOffset(digitAfterDp)
+         */
         int startOffset = 0;
         int endOffset = 0;
         j = 0;
@@ -536,27 +567,14 @@ public class GreenplumHashFunc {
             j--;
         }
         endOffset = j;
-        /*
-        // handle exponent
-        if ((i < val.length()) && (val.charAt(i) == 'e' || val.charAt(i) == 'E')) {
-            int exponent = Integer.parseInt(val.substring(i + 1));
 
-            if (exponent >= Integer.MAX_VALUE / 2 || exponent <= -(Integer.MAX_VALUE / 2)) {
-                // TODO: throws exception here
-            }
-
-            dWeight = dWeight + exponent;
-        }
-        */
-
-        //
         int trimZeroBeforeDpSize = 0;
         if (endOffset < 0) {
             for (int i = digitsBeforeDp.length - 1; i >= startOffset; i--) {
                 if (digitsBeforeDp[i] != 0) {
                     break;
                 }
-                trimZeroBeforeDpSize ++;
+                trimZeroBeforeDpSize++;
             }
         }
 
@@ -574,11 +592,10 @@ public class GreenplumHashFunc {
                 if (digitsAfterDp[i] != 0) {
                     break;
                 }
-                trimZeroAfterDpSize ++;
+                trimZeroAfterDpSize++;
                 weight--;
             }
         }
-
 
         if (endOffset < 0 && startOffset == digitBeforeDpNumber) {
             return new UInt32(-1);
@@ -601,11 +618,13 @@ public class GreenplumHashFunc {
     }
 
     public static char[] shortToCharArray(short val) {
-         // init a char array which size is 2
+        // init a char array which size is 2
         char[] res = new char[2];
-        // type Short do not have toBinaryString function, so use Integer instead.
-        // In toBinaryString function, it will not pad with zeros according to
-        // size of the type in bytes.
+        /*
+         * type Short do not have toBinaryString function, so use Integer instead.
+         * In toBinaryString function, it will not pad with zeros according to
+         * size of the type in bytes.
+         */
         StringBuilder c = new StringBuilder(Integer.toBinaryString(val));
         int zeroLength = 0;
         if (c.length() < 16) {
@@ -620,7 +639,7 @@ public class GreenplumHashFunc {
         int[] inputArray = new int[8];
 
         for (int i = 0; i < c.length(); i++) {
-            inputArray[arrayOffset] = c.charAt(i) == '1' ? 1:0;
+            inputArray[arrayOffset] = c.charAt(i) == '1' ? 1 : 0;
             if (arrayOffset == 7) {
                 res[resOffset] = intArrayToChar(inputArray);
                 inputArray = new int[8];
@@ -644,7 +663,7 @@ public class GreenplumHashFunc {
         }
 
         // give zero at the head of string
-        for (int i = 0 ; i < zeroLength; i++){
+        for (int i = 0; i < zeroLength; i++) {
             c.insert(0, "0");
         }
 
@@ -652,7 +671,7 @@ public class GreenplumHashFunc {
         int resOffset = 7;
         int[] inputArray = new int[8];
         for (int i = 0; i < c.length(); i++) {
-            inputArray[arrayOffset] = c.charAt(i) == '1' ? 1:0;
+            inputArray[arrayOffset] = c.charAt(i) == '1' ? 1 : 0;
             if (arrayOffset == 7) {
                 res[resOffset] = intArrayToChar(inputArray);
                 inputArray = new int[8];
@@ -668,19 +687,9 @@ public class GreenplumHashFunc {
     // given a binary input int array, return char
     public static char intArrayToChar(int[] inputArray) {
         int calResult = 0;
-        for (int i = 0; i < 8; i ++) {
-            calResult = calResult + inputArray[i] * (int)Math.pow(2, 8 - i - 1);
+        for (int i = 0; i < 8; i++) {
+            calResult = calResult + inputArray[i] * (int) Math.pow(2, 8 - i - 1);
         }
-        return (char)calResult;
+        return (char) calResult;
     }
-    /*
-    public static UInt32 hashMacaddr(String val) {
-
-    }
-    */
-    /*
-    public static UInt32 hashInet(String val) {
-
-    }
-    */
 }
