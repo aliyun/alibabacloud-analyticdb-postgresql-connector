@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.List;
@@ -341,22 +342,40 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         boolean res = false;
         try {
             // 准备SQL查询
-            String sql = String.format("select distkey, numsegments from gp_distribution_policy where localoid = '%s.%s'::regclass;", this.targetSchema, this.tableName);
+            String sql = String.format("SELECT dp.distkey, string_agg(a.attname, ' ') AS distkeyname, dp.numsegments\n" +
+                    "            FROM  gp_distribution_policy dp\n" +
+                    "            JOIN pg_class c ON dp.localoid = c.oid\n" +
+                    "            JOIN pg_attribute a ON c.oid = a.attrelid\n" +
+                    "            WHERE c.relname = '%s' AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = '%s') AND\n" +
+                    "            a.attnum = ANY(dp.distkey) GROUP BY dp.distkey, dp.numsegments;", this.tableName, this.targetSchema);
             Statement statement = connection.createStatement();
             ResultSet rs = statement.executeQuery(sql);
 
             if (rs.next()) {
                 // 获取并处理distkey
                 String distKeyStr = rs.getString("distkey");
+                String distKeyNameStr = rs.getString("distkeyname");
+                List<String> shardKeyNames = new ArrayList<>();
                 if (distKeyStr != null && !distKeyStr.trim().isEmpty()) {
                     // 用空格分隔distkey，并转换为Integer列表
                     this.shardKeys = Arrays.stream(distKeyStr.trim().split("\\s+"))
                             .map(s -> Integer.parseInt(s) - 1)
                             .collect(Collectors.toList());
+                    shardKeyNames = Arrays.stream(distKeyNameStr.trim().split("\\s+"))
+                            .collect(Collectors.toList());
 
                     res = true;
                     if (1 == verbose) {
                         LOG.info("Table shard keys are {}", this.shardKeys);
+                    }
+                }
+
+                // 检查定义的schema包含分布键的列顺序是否与ADBPG的Table Schema的分布键一致，如果不一致，则直接报错
+                for (int i = 0; i < this.shardKeys.size(); i++) {
+                    if (!this.fieldNamesStrs[this.shardKeys.get(i)].toLowerCase().equals(shardKeyNames.get(i)))
+                    {
+                        LOG.error("The shard key is not consistent with the table schema, Please check the table schema with adbpg table.");
+                        throw new RuntimeException("The shard key is not consistent with the table schema, Please check the table schema with adbpg table.");
                     }
                 }
 
@@ -592,7 +611,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
 
                 if (treeMapBuffer.size() > 0) {
                     // Init pre-hashed buffer
-                    for (int i = 0; i < shardCount; i++) {
+                    for (int i = 0; i < this.actualShardCount; i++) {
                         List<RowData> addBuffer = new ArrayList<>();
                         List<RowData> deleteBuffer = new ArrayList<>();
                         addBufferMap.put(i, addBuffer);
@@ -617,7 +636,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                         }
                     });
 
-                    for (int i = 0; i < shardCount; i++) {
+                    for (int i = 0; i < this.actualShardCount; i++) {
                         if (deleteBufferMap.get(i).size() > 0) {
                             batchDelete(deleteBufferMap.get(i));
                         }
