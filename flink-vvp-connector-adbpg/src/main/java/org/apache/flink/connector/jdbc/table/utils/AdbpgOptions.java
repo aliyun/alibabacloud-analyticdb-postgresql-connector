@@ -119,6 +119,16 @@ public class AdbpgOptions {
                     .stringType()
                     .defaultValue("upsert")
                     .withDescription("Conflict Mode");
+    public static final ConfigOption<String> DELIMITER =
+            ConfigOptions.key("delimiter")
+                    .stringType()
+                    .defaultValue("\t")
+                    .withDescription("Customize delimiter for COPY, default is \t");
+    public static final ConfigOption<Boolean> REPLACE_BREAK =
+            ConfigOptions.key("replacebreak")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Force to use replace line break character(\n).");
     public static final ConfigOption<Integer> USE_COPY =
             ConfigOptions.key("usecopy")
                     .intType()
