@@ -121,7 +121,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private long inputCount = 0;
     // version after which support upsert for partitioned table
     private long adbpg_version = 6360;
-    private boolean support_upsert = true;
     // datasource
     private transient DruidDataSource dataSource = null;
     private transient ScheduledExecutorService executorService;
@@ -135,6 +134,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private boolean reserveMs;
     private String conflictMode;
     private int useCopy;
+    private String delimiter;
+    private boolean replace_break;
     private String targetSchema;
     private String exceptionMode;
     private boolean caseSensitive;
@@ -171,6 +172,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.exceptionMode = config.get(EXCEPTION_MODE);
         this.caseSensitive = AdbpgOptions.isConfigOptionTrue(config, CASE_SENSITIVE);
         this.writeMode = config.get(WRITE_MODE);
+        this.delimiter = config.get(DELIMITER);
+        this.replace_break = config.get(REPLACE_BREAK);
         this.verbose = config.get(VERBOSE);
         this.retryWaitTime = config.get(RETRY_WAIT_TIME);
         this.fieldNum = fieldNum;
@@ -321,9 +324,6 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             dataSource.init();
             executeSql("set optimizer to off");
-            if (checkPartition() && writeMode == 1) {     // check the target table is partitioned, if it is true, we shouldn't use upsert statement.
-                support_upsert = false;
-            }
             rawConn = (DruidPooledConnection) connection;
             baseConn = (BaseConnection) (rawConn.getConnection());
             copyManager = new CopyManager(baseConn);
@@ -586,13 +586,13 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         try {
             long start = System.currentTimeMillis();
             // TODO add a "copy on conflict" mode directly to replace "copy on conflict" when writemode is "copy" and conflictmode is "upsert"
-            if (writeMode == 1) {                   /** copy, default value */
+            if (writeMode == 1) {                   /** copy, this is the default write mode */
                 StringBuilder stringBuilder = new StringBuilder();
                 for (RowData row : rows) {
                     String[] fields = copyModeRowConverter.convertToString(row);
                     for (int i = 0; i < fields.length; i++) {
-                        stringBuilder.append(fields[i]);
-                        stringBuilder.append(i == fields.length - 1 ? "\r\n" : "\t");
+                        stringBuilder.append(replace_break ? fields[i].replace("\n", "") : fields[i]);      // if replace_break is true, replace '\n' with ''
+                        stringBuilder.append(i == fields.length - 1 ? "\r\n" : delimiter);
                     }
                 }
                 byte[] data = stringBuilder.toString().getBytes(Charsets.UTF_8);
@@ -600,7 +600,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 long end = System.currentTimeMillis();
                 reportMetric(rows, start, end, bps);
             } else if (writeMode == 2) {            /** batch upsert */
-                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
+                String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr);
                 executeSqlWithPrepareStatement(sql, rows, rowConverter, false);
             } else if (writeMode == 0) {            /** batch insert */
                 String insertSql = adbpgDialect.getInsertIntoStatement(tableName, fieldNamesStrs);
@@ -901,7 +901,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     LOG.info("recreate copyManager within executeCopy");
                     copyManager = new CopyManager(baseConn);
                 }
-                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, support_upsert);
+                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode);
                 LOG.info("Writing data with sql:" + sql);
                 copyManager.copyIn(sql, inputStream);
                 break;
@@ -926,7 +926,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
      * @param row
      */
     private void upsertRow(RowData row) {
-        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr, support_upsert);
+        String sql = adbpgDialect.getUpsertStatement(tableName, fieldNamesStrs, primaryFieldNamesStr, nonPrimaryFieldNamesStr);
         LOG.debug("Upserting row with sql:" + sql);
         try {
             executeSqlWithPrepareStatement(sql, Collections.singletonList(row), rowConverter, false);

@@ -73,7 +73,7 @@ public class AdbpgDialect implements Serializable {
             String tableName,
             String[] fieldNames,
             String[] uniqueKeyFields,
-            String[] UpdateFields, boolean support_upsert) {
+            String[] UpdateFields) {
 
         String uniqueColumns =
                 Arrays.stream(uniqueKeyFields)
@@ -88,8 +88,7 @@ public class AdbpgDialect implements Serializable {
                 + ")"
                 + " DO UPDATE SET "
                 + updateClause;
-        return getInsertIntoStatement(tableName, fieldNames)
-                + (support_upsert ? conflictAction : "");
+        return getInsertIntoStatement(tableName, fieldNames) + conflictAction;
     }
 
     public String getPKsFromADBPGTable(Connection conn, String targetSchema, String targetTable) {
@@ -139,14 +138,12 @@ public class AdbpgDialect implements Serializable {
      * Get dialect copy into statement,
      * if conflictMode is "upsert", use copy-on-conflict statement, otherwise use normal copy statement.
      * @param tableName
-     * @param columnnames which in target table
+     * @param fieldNames which in target table
      * @param file The medium of 'copy from' in flink normally 'STDIN'
      * @param conflictMode "ignore" or "strict" or "update" or "upsert"
-     * @param support_upsert whether support upsert
      * @return
      */
-    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode,
-                                   boolean support_upsert) {
+    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode) {
         String columns =
                 Arrays.stream(fieldNames)
                         .map(this::quoteIdentifier)
@@ -169,7 +166,7 @@ public class AdbpgDialect implements Serializable {
                 + " FROM "
                 + file
                 + " NULL 'null' "
-                + (support_upsert ? conflictAction : "");
+                + conflictAction;
     }
 
     public String getDeleteStatementWithNull(
