@@ -122,8 +122,8 @@ public class AdbpgOptions {
     public static final ConfigOption<String> DELIMITER =
             ConfigOptions.key("delimiter")
                     .stringType()
-                    .defaultValue("\\t")
-                    .withDescription("Customize delimiter for COPY, default is \t");
+                    .defaultValue("\t")
+                    .withDescription("Customize delimiter for COPY, default is \\t");
     public static final ConfigOption<Boolean> REPLACE_BREAK =
             ConfigOptions.key("replacebreak")
                     .booleanType()
