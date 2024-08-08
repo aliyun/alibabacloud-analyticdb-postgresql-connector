@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.DELIMITER;
+
 /**
  * Adbpg dialect.
  */
@@ -165,6 +167,7 @@ public class AdbpgDialect implements Serializable {
                 + ")"
                 + " FROM "
                 + file
+                + " DELIMITER '"+ DELIMITER +"' "       // DELIMITER '\t'
                 + " NULL 'null' "
                 + conflictAction;
     }
