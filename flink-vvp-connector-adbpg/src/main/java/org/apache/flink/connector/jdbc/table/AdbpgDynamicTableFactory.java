@@ -77,6 +77,8 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
         optionalOptions.add(AdbpgOptions.CACHE);
         optionalOptions.add(AdbpgOptions.CACHESIZE);
         optionalOptions.add(AdbpgOptions.CACHETTLMS);
+        optionalOptions.add(AdbpgOptions.DELIMITER);
+        optionalOptions.add(AdbpgOptions.REPLACE_BREAK);
         optionalOptions.add(AdbpgOptions.VERBOSE);
         return optionalOptions;
     }

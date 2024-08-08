@@ -901,7 +901,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     LOG.info("recreate copyManager within executeCopy");
                     copyManager = new CopyManager(baseConn);
                 }
-                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode);
+                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, delimiter);
                 LOG.info("Writing data with sql:" + sql);
                 copyManager.copyIn(sql, inputStream);
                 break;

@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.DELIMITER;
+
 /**
  * Adbpg dialect.
  */
@@ -143,7 +145,7 @@ public class AdbpgDialect implements Serializable {
      * @param conflictMode "ignore" or "strict" or "update" or "upsert"
      * @return
      */
-    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode) {
+    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode, String delimiter) {
         String columns =
                 Arrays.stream(fieldNames)
                         .map(this::quoteIdentifier)
@@ -165,6 +167,7 @@ public class AdbpgDialect implements Serializable {
                 + ")"
                 + " FROM "
                 + file
+                + " DELIMITER '"+ delimiter +"' "       // DELIMITER '\t'
                 + " NULL 'null' "
                 + conflictAction;
     }
