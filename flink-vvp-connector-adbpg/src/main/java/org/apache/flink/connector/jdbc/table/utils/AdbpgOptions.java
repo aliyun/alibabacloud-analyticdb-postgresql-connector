@@ -503,6 +503,7 @@ public class AdbpgOptions {
         validateIntegerEnumConfigOption(config, RESERVEMS, ZeroOrOneEnum.integerList());
         validateIntegerEnumConfigOption(config, CASE_SENSITIVE, ZeroOrOneEnum.integerList());
         validateIntegerEnumConfigOption(config, WRITE_MODE, WriteMode.integerList());
+        validateStringConfigOption(config, DELIMITER);
         validateIntegerEnumConfigOption(config, VERBOSE, ZeroOrOneEnum.integerList());
     }
 
