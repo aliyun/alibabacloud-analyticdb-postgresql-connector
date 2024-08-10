@@ -165,7 +165,7 @@ public class AdbpgDialect implements Serializable {
                 + ")"
                 + " FROM "
                 + file
-                + " NULL 'null' "
+                + " "
                 + conflictAction;
     }
 
