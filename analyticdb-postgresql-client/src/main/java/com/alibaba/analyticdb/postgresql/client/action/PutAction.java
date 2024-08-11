@@ -4,10 +4,10 @@
 
 package com.alibaba.analyticdb.postgresql.client.action;
 
-import com.alibaba.hologres.client.impl.collector.BatchState;
-import com.alibaba.hologres.client.model.Record;
-import com.alibaba.hologres.client.model.TableSchema;
-import com.alibaba.hologres.client.model.WriteMode;
+
+import com.alibaba.analyticdb.postgresql.client.TableMetadata;
+import com.alibaba.analyticdb.postgresql.client.WriteMode;
+import com.alibaba.analyticdb.postgresql.client.Record;
 
 import java.security.InvalidParameterException;
 import java.util.List;
@@ -19,8 +19,7 @@ public class PutAction extends AbstractAction<Void> {
 
 	final List<Record> recordList;
 	final long byteSize;
-	BatchState state;
-	TableSchema schema;
+	TableMetadata metadata;
 	WriteMode writeMode;
 
 	/**
@@ -28,18 +27,16 @@ public class PutAction extends AbstractAction<Void> {
 	 *
 	 * @param recordList
 	 * @param byteSize
-	 * @param state
 	 */
-	public PutAction(List<Record> recordList, long byteSize, WriteMode mode, BatchState state) {
+	public PutAction(List<Record> recordList, long byteSize, WriteMode mode) {
 		this.recordList = recordList;
 		this.byteSize = byteSize;
-		this.state = state;
 		this.writeMode = mode;
 		if (recordList.size() > 0) {
-			schema = recordList.get(0).getSchema();
+			metadata = recordList.get(0).getMetadata();
 			for (Record record : recordList) {
-				if (!record.getSchema().equals(schema)) {
-					throw new InvalidParameterException("Records in PutAction must for the same table. the first table is " + schema.getTableNameObj().getFullName() + " but found another table " + record.getSchema().getTableNameObj().getFullName());
+				if (!record.getMetadata().equals(metadata)) {
+					throw new InvalidParameterException("Records in PutAction must for the same table. the first table is " + metadata.getTableNameObj().getFullName() + " but found another table " + record.getMetadata().getTableNameObj().getFullName());
 				}
 			}
 		} else {
@@ -59,11 +56,7 @@ public class PutAction extends AbstractAction<Void> {
 		return byteSize;
 	}
 
-	public BatchState getState() {
-		return state;
-	}
-
-	public TableSchema getSchema() {
-		return schema;
+	public TableMetadata getMetadata() {
+		return metadata;
 	}
 }

@@ -4,8 +4,7 @@
 
 package com.alibaba.analyticdb.postgresql.client.action;
 
-import com.alibaba.hologres.client.exception.ExceptionCode;
-import com.alibaba.hologres.client.exception.HoloClientException;
+import com.alibaba.analyticdb.postgresql.client.exception.ADBClientException;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -29,17 +28,17 @@ public abstract class AbstractAction<T> {
 		return future;
 	}
 
-	public T getResult() throws HoloClientException {
+	public T getResult() throws ADBClientException {
 		try {
 			return future.get();
 		} catch (InterruptedException e) {
-			throw new HoloClientException(ExceptionCode.INTERNAL_ERROR, "interrupt", e);
+			throw new ADBClientException("Internal error, interrupt", e);
 		} catch (ExecutionException e) {
 			Throwable cause = e.getCause();
-			if (cause instanceof HoloClientException) {
-				throw (HoloClientException) cause;
+			if (cause instanceof ADBClientException) {
+				throw (ADBClientException) cause;
 			} else {
-				throw new HoloClientException(ExceptionCode.INTERNAL_ERROR, "", cause);
+				throw new ADBClientException("Internal error", cause);
 			}
 		}
 	}

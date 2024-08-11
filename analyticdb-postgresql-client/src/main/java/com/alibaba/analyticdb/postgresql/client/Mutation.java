@@ -7,6 +7,4 @@ public abstract class Mutation implements Serializable, HeapSize {
 		INSERT,
 		DELETE
 	}
-
-	public
 }

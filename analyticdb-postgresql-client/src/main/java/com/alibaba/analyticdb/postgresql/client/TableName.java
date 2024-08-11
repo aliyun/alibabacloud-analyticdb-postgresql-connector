@@ -1,5 +1,6 @@
 package com.alibaba.analyticdb.postgresql.client;
 
+import com.alibaba.analyticdb.postgresql.client.exception.ADBClientException;
 import com.alibaba.analyticdb.postgresql.client.exception.InvalidRelationException;
 
 import java.io.Serializable;
@@ -22,6 +23,26 @@ public class TableName implements Serializable {
 		this.schemaName = schemaName;
 		this.tableName = tableName;
 		this.fullName = fullName;
+	}
+
+	public TableName(String name) throws ADBClientException {
+		if (name == null || name.isEmpty()) {
+			throw new InvalidRelationException(name);
+		}
+
+		if (name.contains(".")) {
+			String[] parts = name.split("\\.", -1);
+			if (parts.length != 2) {
+				throw new ADBClientException(name);
+			} else {
+
+			}
+			new TableName(parts[0], parts[1], name);
+		} else {
+			this.schemaName = DEFAULT_SCHEMA_NAME;
+			this.tableName = name;
+			this.fullName = DEFAULT_SCHEMA_NAME + "." + name;
+		}
 	}
 
 	public String getFullName() {
