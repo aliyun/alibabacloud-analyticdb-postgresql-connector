@@ -57,6 +57,7 @@ import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
+import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -932,7 +933,28 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 }
                 String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, delimiter);
                 LOG.info("Writing data with sql:" + sql);
-                copyManager.copyIn(sql, inputStream);
+                try {
+                    copyManager.copyIn(sql, inputStream);
+                } catch (PSQLException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("Database connection failed")) {
+                        LOG.error("Error during copyIn, reconnecting and retrying", e);
+                        // Reacquire the connection and retry
+                        if (baseConn != null && !baseConn.isClosed() && !baseConn.isValid(1)) { // isValid(timeout),timeout: seconds
+                            // Discard the invalid connection
+                            if (dataSource != null) {
+                                // We should close and discard druid connection firstly, then close base connection.
+                                // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
+                                dataSource.discardConnection(baseConn);
+                            }
+                            DruidPooledConnection rawConn = dataSource.getConnection();
+                            baseConn = (BaseConnection) (rawConn.getConnection());
+                            copyManager = new CopyManager(baseConn);
+                            copyManager.copyIn(sql, inputStream);
+                        }
+                    } else {
+                        LOG.error("Error during copyIn", e);
+                    }
+                }
                 break;
             } catch (SQLException | IOException e) {
                 if ((e.getMessage() != null && e.getMessage().contains("duplicate key")
