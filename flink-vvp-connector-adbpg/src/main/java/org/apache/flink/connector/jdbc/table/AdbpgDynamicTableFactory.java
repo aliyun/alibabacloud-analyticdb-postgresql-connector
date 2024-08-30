@@ -60,6 +60,7 @@ public class AdbpgDynamicTableFactory implements DynamicTableSinkFactory, Dynami
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> optionalOptions = new HashSet<>();
         optionalOptions.add(AdbpgOptions.MAX_RETRY_TIMES);
+        optionalOptions.add(AdbpgOptions.REPLACE_NULL_CHAR);
         optionalOptions.add(AdbpgOptions.BATCH_SIZE);
         optionalOptions.add(AdbpgOptions.BATCH_WRITE_TIMEOUT_MS);
         optionalOptions.add(AdbpgOptions.CONNECTION_MAX_ACTIVE);

@@ -41,6 +41,7 @@ import org.apache.flink.metrics.Meter;
 import org.apache.flink.shaded.guava30.com.google.common.base.Joiner;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.BooleanType;
@@ -56,6 +57,7 @@ import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
+import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,6 +141,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private String targetSchema;
     private String exceptionMode;
     private boolean caseSensitive;
+    private boolean replaceNullChar;
     private int writeMode;
     private int verbose;
     //metric
@@ -167,6 +170,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.conflictMode = config.get(CONFLICT_MODE);
         this.useCopy = config.get(USE_COPY);
         this.maxRetryTime = config.get(MAX_RETRY_TIMES);
+        this.replaceNullChar = config.get(REPLACE_NULL_CHAR);
         this.batchSize = config.get(BATCH_SIZE);
         this.targetSchema = config.get(TARGET_SCHEMA);
         this.exceptionMode = config.get(EXCEPTION_MODE);
@@ -354,6 +358,26 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         deleteCounter = MetricUtils.registerSinkDeleteCounter(getRuntimeContext());
     }
 
+    // replace '\u0000'
+    private RowData replaceNullCharFromRecord(RowData from) {
+        GenericRowData rowData;
+        rowData = (GenericRowData) from;
+
+        for (int i = 0; i < rowData.getArity(); i++) {
+            if (rowData.isNullAt(i)) {
+                continue;
+            }
+            if (rowData.getField(i) instanceof StringData) {
+                StringData stringData = (StringData) rowData.getField(i);
+                String str = stringData.toString();
+                str = str.replace("\u0000", ""); // replace '\u0000'
+                rowData.setField(i, StringData.fromString(str));
+            }
+        }
+
+        return rowData;
+    }
+
     @Override
     public void writeRecord(RowData record) throws IOException {
         if (null == record) {
@@ -361,6 +385,12 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
         RowData rowData = rowDataSerializer.copy(record);
         inputCount++;
+
+        // replace '\u0000'
+        if(replaceNullChar){
+            rowData = replaceNullCharFromRecord(rowData);
+        }
+
         if (existsPrimaryKeys) {
             synchronized (mapBufferWithPk) {
                 // Construct primary key string as map key
@@ -903,7 +933,28 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 }
                 String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, delimiter);
                 LOG.info("Writing data with sql:" + sql);
-                copyManager.copyIn(sql, inputStream);
+                try {
+                    copyManager.copyIn(sql, inputStream);
+                } catch (PSQLException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("Database connection failed")) {
+                        LOG.error("Error during copyIn, reconnecting and retrying", e);
+                        // Reacquire the connection and retry
+                        if (baseConn != null && !baseConn.isClosed() && !baseConn.isValid(1)) { // isValid(timeout),timeout: seconds
+                            // Discard the invalid connection
+                            if (dataSource != null) {
+                                // We should close and discard druid connection firstly, then close base connection.
+                                // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
+                                dataSource.discardConnection(baseConn);
+                            }
+                            DruidPooledConnection rawConn = dataSource.getConnection();
+                            baseConn = (BaseConnection) (rawConn.getConnection());
+                            copyManager = new CopyManager(baseConn);
+                            copyManager.copyIn(sql, inputStream);
+                        }
+                    } else {
+                        LOG.error("Error during copyIn", e);
+                    }
+                }
                 break;
             } catch (SQLException | IOException e) {
                 if ((e.getMessage() != null && e.getMessage().contains("duplicate key")

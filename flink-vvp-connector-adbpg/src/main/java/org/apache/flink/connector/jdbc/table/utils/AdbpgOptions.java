@@ -83,6 +83,11 @@ public class AdbpgOptions {
                     .intType()
                     .defaultValue(3)
                     .withDescription("Max retry times when execute query");
+    public static final ConfigOption<Boolean> REPLACE_NULL_CHAR =
+            ConfigOptions.key("replacenullchar")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Replace null character from stringData");
     public static final ConfigOption<String> TARGET_SCHEMA =
             ConfigOptions.key("targetschema")
                     .stringType()
