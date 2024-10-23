@@ -918,7 +918,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
         inputStream.mark(0);
         int retryTime = 0;
-        while (retryTime++ < maxRetryTime) {
+        while (retryTime++ <= maxRetryTime) {
             try {
                 inputStream.reset();
                 inputStream.mark(0);
@@ -936,23 +936,24 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                 try {
                     copyManager.copyIn(sql, inputStream);
                 } catch (PSQLException e) {
+                    LOG.error("Error during copyIn.", e);
                     if (e.getMessage() != null && e.getMessage().contains("Database connection failed")) {
-                        LOG.error("Error during copyIn, reconnecting and retrying", e);
-                        // Reacquire the connection and retry
+                        // Reacquire the connection
                         if (baseConn != null && !baseConn.isClosed() && !baseConn.isValid(1)) { // isValid(timeout),timeout: seconds
                             // Discard the invalid connection
                             if (dataSource != null) {
-                                // We should close and discard druid connection firstly, then close base connection.
-                                // Otherwise, druid will try to recycle the closed base connection, and print unusable log.
+                                // We should close and discard valid connection firstly.
+                                // Otherwise, druid will try to recycle the invalid base connection, and print unusable log.
                                 dataSource.discardConnection(baseConn);
                             }
-                            DruidPooledConnection rawConn = dataSource.getConnection();
-                            baseConn = (BaseConnection) (rawConn.getConnection());
-                            copyManager = new CopyManager(baseConn);
-                            copyManager.copyIn(sql, inputStream);
                         }
+                    }
+                    copyManager = null; //  reset copyManager
+                    if (retryTime <= maxRetryTime) {
+                        LOG.info("Reconnecting and retrying.");
+                        continue; // Retry the copyIn operation
                     } else {
-                        LOG.error("Error during copyIn", e);
+                        LOG.error("Failed to execute copyIn after " + maxRetryTime + " retries");
                     }
                 }
                 break;
