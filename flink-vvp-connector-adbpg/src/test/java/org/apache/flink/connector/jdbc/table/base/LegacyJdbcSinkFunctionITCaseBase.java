@@ -297,10 +297,9 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
         }
     }
 
-    private void compareResultStr(List<Row> data, ResultSet sinkValues, boolean hasKey)
+    public static void compareResultStr(List<Row> data, ResultSet sinkValues, boolean hasKey)
             throws SQLException {
         List<Row> expectedResult = computeExpectedResultOrderByIndex(data, hasKey);
-
         List<Row> result = new ArrayList<>();
         try {
             int fieldCount = sinkValues.getMetaData().getColumnCount();
@@ -388,13 +387,13 @@ public abstract class LegacyJdbcSinkFunctionITCaseBase {
         return StringUtils.join(fields, ",\n");
     }
 
-    private String createOptions(Map<String, String> options) {
+    public static String createOptions(Map<String, String> options) {
         List<String> optionValues = new ArrayList<>();
         options.forEach((k, v) -> optionValues.add(String.format("'%s' = '%s'", k, v)));
         return StringUtils.join(optionValues, ",\n");
     }
 
-    private List<Row> computeExpectedResultOrderByIndex(List<Row> data, boolean hasKey) {
+    private static List<Row> computeExpectedResultOrderByIndex(List<Row> data, boolean hasKey) {
         if (hasKey) {
             Map<Integer, Row> idToValue = new HashMap<>();
             for (Row row : data) {

@@ -143,20 +143,28 @@ public class AdbpgDialect implements Serializable {
      * @param fieldNames which in target table
      * @param file The medium of 'copy from' in flink normally 'STDIN'
      * @param conflictMode "ignore" or "strict" or "update" or "upsert"
+     * @param copyFormat "text" or "csv"
+     * @param copyQuote The default is double-quote. This must be a single one-byte character.
      * @return
      */
-    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode, String delimiter) {
+    public String getCopyStatement(String tableName, String[] fieldNames, String file, String conflictMode, String delimiter, String copyFormat, String copyQuote) {
         String columns =
                 Arrays.stream(fieldNames)
                         .map(this::quoteIdentifier)
                         .collect(Collectors.joining(", "));
         String conflictAction;
+        String format = "";
+        String quote = "";
         if ("ignore".equalsIgnoreCase(conflictMode)     /** if conflictmode is not "upsert", use normal copy statement or insert statement */
                 || "strict".equalsIgnoreCase(conflictMode)
                 || "update".equalsIgnoreCase(conflictMode)) {
             conflictAction = "";
         } else {                                          /** if conflictmode is "upsert", use copy-on-conflict statement or insert-on-conflict statement */
             conflictAction = " DO on conflict DO update";
+        }
+        if ("csv".equalsIgnoreCase(copyFormat)) {
+            quote = " quote '" + copyQuote + "'";
+            format = " " + copyFormat + " ESCAPE '\\'" + quote;
         }
         return "COPY "
                 + quoteIdentifier(targetSchema)
@@ -167,8 +175,9 @@ public class AdbpgDialect implements Serializable {
                 + ")"
                 + " FROM "
                 + file
-                + " DELIMITER '"+ delimiter +"' "       // DELIMITER '\t'
-                + " NULL 'null' "
+                + " DELIMITER '"+ delimiter +"'"       // DELIMITER '\t'
+                + " NULL 'null'"
+                + format
                 + conflictAction;
     }
 

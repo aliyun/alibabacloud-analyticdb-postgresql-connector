@@ -62,7 +62,9 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
                         this.put(AdbpgOptions.WRITE_MODE.key(), "1");
                         this.put(AdbpgOptions.EXCEPTION_MODE.key(), "strict");
-                        this.put(AdbpgOptions.CONFLICT_MODE.key(), "update");
+                        this.put(AdbpgOptions.CONFLICT_MODE.key(), "upsert");
+                        this.put(AdbpgOptions.COPY_FORMAT.key(), "csv");
+                        this.put(AdbpgOptions.COPY_QUOTE.key(), "\"");
                     }
                 },
                 new HashMap<String, String>() {
@@ -94,7 +96,7 @@ public class AdbpgDynamicSinkTest extends LegacyJdbcSinkFunctionITCaseBase {
                         this.put(AdbpgOptions.TABLE_NAME.key(), TEST_TABLE_NAME);
                         this.put(AdbpgOptions.BATCH_SIZE.key(), "20");
                         this.put(AdbpgOptions.EXCEPTION_MODE.key(), "strict");
-                        this.put(AdbpgOptions.CONFLICT_MODE.key(), "update");
+                        this.put(AdbpgOptions.CONFLICT_MODE.key(), "upsert");
                     }
                 });
     }

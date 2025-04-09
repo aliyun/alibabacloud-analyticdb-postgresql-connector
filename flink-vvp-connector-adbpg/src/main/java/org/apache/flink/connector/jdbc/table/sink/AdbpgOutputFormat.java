@@ -138,6 +138,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     private int useCopy;
     private String delimiter;
     private boolean replace_break;
+    private String copyFormat;
+    private String copyQuote;
+    private char quoteChar;
     private String targetSchema;
     private String exceptionMode;
     private boolean caseSensitive;
@@ -178,6 +181,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         this.writeMode = config.get(WRITE_MODE);
         this.delimiter = config.get(DELIMITER);
         this.replace_break = config.get(REPLACE_BREAK);
+        this.copyFormat = config.get(COPY_FORMAT);
+        this.copyQuote = config.get(COPY_QUOTE);
+        this.quoteChar = this.copyQuote != null && this.copyQuote.length() > 0 ? this.copyQuote.charAt(0) : '\0';
         this.verbose = config.get(VERBOSE);
         this.retryWaitTime = config.get(RETRY_WAIT_TIME);
         this.fieldNum = fieldNum;
@@ -387,7 +393,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         inputCount++;
 
         // replace '\u0000'
-        if(replaceNullChar){
+        if (replaceNullChar) {
             rowData = replaceNullCharFromRecord(rowData);
         }
 
@@ -478,8 +484,9 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
     }
 
     public void sync() {
-        if (1 == verbose) {
-            LOG.info("start to sync " + (mapBufferWithPk.size() + mapBufferWithoutPk.size()) + " records.");
+        int total = mapBufferWithPk.size() + mapBufferWithoutPk.size();
+        if (1 == verbose && total > 0) {
+            LOG.info("start to sync " + total + " records.");
         }
         // Synchronized mapBuffer or mapBufferWithoutPk according to existsPrimaryKeys
         synchronized (existsPrimaryKeys ? mapBufferWithPk : mapBufferWithoutPk) {
@@ -512,8 +519,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     }
                 }
             }
-            if (1 == verbose) {
-                LOG.info("finished syncing " + (mapBufferWithPk.size() + mapBufferWithoutPk.size()) + " records.");
+            if (1 == verbose && total > 0) {
+                LOG.info("finished syncing " + total + " records.");
             }
             // Clear mapBuffer and mapBufferWithoutPk
             mapBufferWithPk.clear();
@@ -598,6 +605,56 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
         }
     }
 
+    public String escapeDoubleQuotes(String input) {
+        if (null == input) {
+            return input;
+        }
+
+        StringBuilder sb = new StringBuilder(input.length());
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (c == quoteChar) { // 对源数据中的封闭符进行转义，避免源数据被错误分隔
+                sb.append('\\');
+            } else if (c == '\u0000') {
+                continue;
+            }
+            sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Preprocess data to be written to the database using copy writemode.
+     * There are two types of copy format:
+     *   1. csv:  "a" "b" "c"
+     *   2. text: a b c
+     * @param rows
+     */
+    public byte[] preprocessCopyData(List<RowData> rows) {
+        StringBuilder stringBuilder = new StringBuilder();
+        for (RowData row : rows) {
+            String[] fields = copyModeRowConverter.convertToString(row);
+            for (int i = 0; i < fields.length; i++) {
+                if ("csv".equalsIgnoreCase(copyFormat)) {
+                    if ("null".equals(fields[i])) {
+                        stringBuilder.append("null");
+                    } else {
+                        stringBuilder.append(copyQuote)
+                                .append(escapeDoubleQuotes(fields[i]))
+                                .append(copyQuote);
+                    }
+                } else if ("text".equalsIgnoreCase(copyFormat)) {
+                    stringBuilder.append(replace_break ? fields[i].replace("\n", "") : fields[i]);
+                } else {
+                    LOG.error("copyformat only supports \"text\" or \"csv\", not \"{}\"", copyFormat);
+                    throw new IllegalArgumentException("Unsupported copyformat: " + copyFormat);
+                }
+                stringBuilder.append(i == fields.length - 1 ? "\r\n" : delimiter);
+            }
+        }
+        return stringBuilder.toString().getBytes(Charsets.UTF_8);
+    }
+
     /**
      * The router of writing method to the database. Use batch write logic first which can maximizes the writing performance
      * and if batch write logic failed, will use row by row write logic with the preset 'conflict mode'.
@@ -617,15 +674,8 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
             long start = System.currentTimeMillis();
             // TODO add a "copy on conflict" mode directly to replace "copy on conflict" when writemode is "copy" and conflictmode is "upsert"
             if (writeMode == 1) {                   /** copy, this is the default write mode */
-                StringBuilder stringBuilder = new StringBuilder();
-                for (RowData row : rows) {
-                    String[] fields = copyModeRowConverter.convertToString(row);
-                    for (int i = 0; i < fields.length; i++) {
-                        stringBuilder.append(replace_break ? fields[i].replace("\n", "") : fields[i]);      // if replace_break is true, replace '\n' with ''
-                        stringBuilder.append(i == fields.length - 1 ? "\r\n" : delimiter);
-                    }
-                }
-                byte[] data = stringBuilder.toString().getBytes(Charsets.UTF_8);
+                // preprocess data to be written to the database using copy writemode
+                byte[] data = preprocessCopyData(rows);
                 bps = executeCopy(data);
                 long end = System.currentTimeMillis();
                 reportMetric(rows, start, end, bps);
@@ -931,7 +981,7 @@ public class AdbpgOutputFormat extends RichOutputFormat<RowData> implements Clea
                     LOG.info("recreate copyManager within executeCopy");
                     copyManager = new CopyManager(baseConn);
                 }
-                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, delimiter);
+                String sql = adbpgDialect.getCopyStatement(tableName, fieldNamesStrs, "STDIN", conflictMode, delimiter, copyFormat, copyQuote);
                 LOG.info("Writing data with sql:" + sql);
                 try {
                     copyManager.copyIn(sql, inputStream);

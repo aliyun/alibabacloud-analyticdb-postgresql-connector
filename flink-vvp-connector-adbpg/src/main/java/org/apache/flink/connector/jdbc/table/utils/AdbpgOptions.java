@@ -101,7 +101,7 @@ public class AdbpgOptions {
     public static final ConfigOption<Integer> VERBOSE =
             ConfigOptions.key("verbose")
                     .intType()
-                    .defaultValue(1)
+                    .defaultValue(0)
                     .withDescription("VERBOSE OR NOT");
     //optional sink options
     public static final ConfigOption<Integer> BATCH_SIZE =
@@ -129,6 +129,16 @@ public class AdbpgOptions {
                     .stringType()
                     .defaultValue("\t")
                     .withDescription("Customize delimiter for COPY, default is \\t");
+    public static final ConfigOption<String> COPY_FORMAT =
+            ConfigOptions.key("copyformat")
+                    .stringType()
+                    .defaultValue("csv")
+                    .withDescription("Customize format for COPY, default is csv");
+    public static final ConfigOption<String> COPY_QUOTE =
+            ConfigOptions.key("copyquote")
+                    .stringType()
+                    .defaultValue("\"")
+                    .withDescription("Customize quote for COPY, default is \"");
     public static final ConfigOption<Boolean> REPLACE_BREAK =
             ConfigOptions.key("replacebreak")
                     .booleanType()
@@ -424,7 +434,7 @@ public class AdbpgOptions {
             ReadableConfig config, ConfigOption<String> configOption) {
         if (config.getOptional(configOption).isPresent()) {
 
-            if (YaStringUtils.isEmpty(config.get(configOption)) || config.get(configOption).trim().length() == 0) {
+            if (YaStringUtils.isEmpty(config.get(configOption)) || config.get(configOption).length() == 0) {
                 throw new IllegalArgumentException(
                         String.format(
                                 " option %s should not be null or empty.", configOption.key()));

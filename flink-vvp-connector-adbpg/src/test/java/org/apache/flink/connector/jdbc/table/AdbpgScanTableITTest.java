@@ -15,8 +15,10 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.types.Row;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.After;
 import org.junit.Test;
 import static org.apache.flink.connector.jdbc.table.utils.AdbpgOptions.CONNECTOR_TYPE;
+import java.sql.SQLException;
 
 public class AdbpgScanTableITTest extends AdbpgScanITCaseBase {
 
@@ -154,5 +156,14 @@ public class AdbpgScanTableITTest extends AdbpgScanITCaseBase {
                                 true)
                 };
         Assert.assertArrayEquals(expected, actual);
+    }
+
+    protected void cleanup() throws SQLException {
+        executeSql("DROP TABLE " + TEST_TABLE_NAME + ";", false);
+    }
+
+    @After
+    public void after() throws Exception {
+        cleanup();
     }
 }
